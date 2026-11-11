@@ -1,16 +1,29 @@
-"""Does better cleaning help? Test trimming and smoothing variants on Aayu's AirPods takes.
-Scores: block-recorded set (146) with the within-word half split, and drill takes with leave-one-out
-plus a time split (train on the first 60% of drill takes, test on the rest).
+"""Shared helpers for the analysis scripts: dataset path and --since args, trimming, smoothing, DTW, scoring.
+Needs numpy and numba: pip install -r analysis/requirements.txt
 """
-import json, sys
+import argparse, json, pathlib
 import numpy as np
 from numba import njit
 
-d = json.load(open("/Users/aayu/Library/Application Support/Subvox/dataset.json"))
-since = float(open("/Users/aayu/Workspace/developer/subvox/.drill_since").read())
-ALL = sorted(d["templates"], key=lambda t: t["createdAt"])
-words = sorted({t["label"] for t in ALL})
+DEFAULT_DATASET = pathlib.Path.home() / "Library/Application Support/Subvox/dataset.json"
+DRILL_SINCE = pathlib.Path(__file__).resolve().parent.parent / ".drill_since"
 ROT = ["rx", "ry", "rz"]; ACC = ["ax", "ay", "az"]
+
+def parse_args(description, drill_since_file=False):
+    """--dataset PATH (default: the app's dataset.json) and --since CREATED_AT (where drill takes start).
+    With drill_since_file, a missing --since is read from .drill_since at the repo root if it exists."""
+    p = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--dataset", type=pathlib.Path, default=DEFAULT_DATASET, help="Subvox dataset.json (default: %(default)s)")
+    p.add_argument("--since", type=float, help="createdAt of the first drill take (seconds since 2001, as in dataset.json)")
+    args = p.parse_args()
+    if args.since is None and drill_since_file and DRILL_SINCE.exists():
+        args.since = float(DRILL_SINCE.read_text())
+    return args
+
+def load_takes(path):
+    """Every take sorted by createdAt, and the sorted word list."""
+    takes = sorted(json.load(open(path))["templates"], key=lambda t: t["createdAt"])
+    return takes, sorted({t["label"] for t in takes})
 
 def raw(t, keys):
     return np.array([[s[k] for k in keys] for s in t["samples"]], float)
@@ -66,6 +79,7 @@ def dmat(X):
     return M
 
 def scores(T, X):
+    words = sorted({t["label"] for t in T})
     y = np.array([words.index(t["label"]) for t in T]); M = dmat(X)
     L = M.copy(); np.fill_diagonal(L, np.inf); loo = np.mean(y[L.argmin(1)] == y)
     # within-word half split (first half of each word's takes vs second half), both directions

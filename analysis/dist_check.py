@@ -1,6 +1,7 @@
 """How far is each take from its nearest neighbour, in the app's units? Shows what max distance does."""
 import numpy as np
-from clean_test_lib import ALL, words, make, dmat
+from clean_test_lib import parse_args, load_takes, make, dmat
+ALL, words = load_takes(parse_args(__doc__).dataset)
 T = ALL; y = np.array([words.index(t["label"]) for t in T])
 X = make(T, ["ax","ay","az","rx","ry","rz","pitch","roll","yaw"], frac=0.15, pad=2)  # app default: all motion
 M = dmat(X); np.fill_diagonal(M, np.inf)
