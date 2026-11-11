@@ -1,6 +1,6 @@
 """Real-data check of plan step 3: train on wear 0, test on wear 1 (AirPods re-seated). DTW-1NN like the app."""
-import json, sys, numpy as np
-sys.path.insert(0, "analysis")
+import json, sys, pathlib, numpy as np
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from clean_test_lib import dtw, trim_idx, smooth, energy, raw
 d = json.load(open("/Users/aayu/Library/Application Support/Subvox/dataset.json"))
 T = sorted(d["templates"], key=lambda t: t["createdAt"])
@@ -59,10 +59,15 @@ for name, cfg in [("baseline (app-style global z)", (False, False, False)), ("+ 
                   ("per-wear z + gravity", (True, True, False)), ("all three", (True, True, True))]:
     acc, n = run(*cfg); print(f"{name:32s} {acc:.1%}  ({int(round(acc*n))}/{n})")
 
-# Within-wear reference: last 29 takes of wear 0 tested against the earlier wear-0 takes (same seating, time split).
+# Fair reference: the SAME 172 training takes (wear 0 minus its last 29), tested on wear 0's last 29 vs on wear 1.
+# Comparing the 201-take baseline above to a 172-take same-wear split would credit re-seating for extra training data.
 X = [feats(t, None) for t in T]; sd = np.concatenate(X).std(0) + 1e-9; X = [x / sd for x in X]
-w0 = [i for i in range(len(T)) if wear[i] == 0]; tr, te = w0[:-29], w0[-29:]
-pred = [y[tr][int(np.argmin([dtw(X[j], X[i], 10) for i in tr]))] for j in te]
-print(f"same-wear time split (last 29 of wear 0): {np.mean(np.array(pred) == y[te]):.1%}")
+w0 = [i for i in range(len(T)) if wear[i] == 0]; w1 = [i for i in range(len(T)) if wear[i] == 1]; tr = w0[:-29]
+hit = lambda te: np.array([y[tr][int(np.argmin([dtw(X[j], X[i], 10) for i in tr]))] == y[j] for j in te])
+same, cross = hit(w0[-29:]), hit(w1); rng = np.random.default_rng(0)
+diff = [rng.choice(cross, 29).mean() - rng.choice(same, 29).mean() for _ in range(5000)]
+print(f"matched 172-take train: same-wear {same.mean():.1%}, re-seated {cross.mean():.1%}, "
+      f"diff {cross.mean() - same.mean():+.1%} (95% bootstrap CI {np.percentile(diff, 2.5):+.0%} to {np.percentile(diff, 97.5):+.0%})")
+print("wear sizes by gap threshold:", {s: np.bincount(np.concatenate([[0], np.cumsum(np.diff(c) > s)])).tolist() for s in (120, 180)})
 from math import comb
 p = sum(comb(29, k) * 0.2**k * 0.8**(29 - k) for k in range(20, 30)); print(f"P(>=20/29 by chance at 20%) = {p:.1e}")
