@@ -53,7 +53,7 @@ final class SessionRecorder {
         if !audio.isRunning {
             Task {
                 await audio.start()
-                start(audio: audio)
+                if audio.isRunning { start(audio: audio) } else { error = "Mic didn't start: \(audio.error ?? "unknown")" }
             }
             return
         }
