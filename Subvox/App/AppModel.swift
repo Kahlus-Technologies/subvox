@@ -50,7 +50,9 @@ final class AppModel {
     var decodeMode: CaptureController.Mode = .hold {
         didSet { syncCaptureMode() }
     }
-    var maxDistance: Double = 1.5
+    // Measured on Aayu's AirPods takes: at 1.5 the app refuses ~9% of real words; at 3.0 it answers 99%
+    // and accuracy on answered takes only drops 76% -> 74%. Refusals were costing more than they saved.
+    var maxDistance: Double = 3.0
     var minConfidence: Double = 0.05
     private(set) var decoded: [DecodedWord] = []
     private(set) var lastSegment: [MotionSample] = []
@@ -155,24 +157,29 @@ final class AppModel {
         dataset.templates.append(template)
         lastTemplateID = template.id
         persist()
-        if drill { advanceDrill() }
+        if drill {
+            drillCounts[template.label, default: 0] += 1
+            advanceDrill()
+        }
     }
 
     // MARK: Drill: random word order, so takes of one word are spread over the session
     // (block-recorded takes look alike because head and earbud fit drift over minutes).
 
     var drill = false {
-        didSet { if drill { advanceDrill() } }
+        didSet {
+            if drill { drillCounts = [:]; advanceDrill() }
+        }
     }
+    // Counts for this drill session only, so old block-recorded takes don't starve a word.
+    @ObservationIgnored private var drillCounts: [String: Int] = [:]
 
     private func advanceDrill() {
         let words = dataset.vocabulary
         guard words.count > 1 else { selectedWord = words.first; return }
-        // Pick a different word than the last one, favouring words with fewer takes.
-        let counts = Dictionary(grouping: dataset.templates, by: \.label).mapValues(\.count)
         let candidates = words.filter { $0 != selectedWord }
-        let minCount = candidates.map { counts[$0] ?? 0 }.min() ?? 0
-        let pool = candidates.filter { (counts[$0] ?? 0) <= minCount + 2 }
+        let minCount = candidates.map { drillCounts[$0] ?? 0 }.min() ?? 0
+        let pool = candidates.filter { (drillCounts[$0] ?? 0) == minCount }
         selectedWord = (pool.isEmpty ? candidates : pool).randomElement()
     }
 
