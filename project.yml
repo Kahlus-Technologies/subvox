@@ -4,11 +4,12 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+configFiles:
+  Debug: Signing.xcconfig
+  Release: Signing.xcconfig
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    DEVELOPMENT_TEAM: 94KYLL93PM
-    CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
@@ -27,7 +28,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aayu.subvox
-        CODE_SIGN_IDENTITY: Apple Development
         ENABLE_HARDENED_RUNTIME: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   SubvoxTests:

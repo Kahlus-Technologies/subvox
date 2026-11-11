@@ -1,0 +1,9 @@
+// Ad-hoc signing by default, so a fresh clone builds and tests on any Mac without an Apple team.
+// To sign with your own team instead, create Local.xcconfig (gitignored) next to this file:
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   CODE_SIGN_IDENTITY = Apple Development
+//   CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = -
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM =
+#include? "Local.xcconfig"
