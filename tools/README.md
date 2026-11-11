@@ -25,3 +25,10 @@ within 35-50 ms (median) of Phonon's.
 turns every session with `motion.csv` and `words.json` into `subvox-dataset/words.npz` (one row per spoken
 word with its motion slice) and `subvox-dataset/summary.txt` (sessions, speakers, minutes, words, and
 sessions skipped and why). Needs numpy only. Test: `python3 -m unittest discover -s tools -p 'test_*.py'`.
+
+## Check audio-to-motion alignment
+
+`python3 tools/check_alignment.py ~/Documents/Subvox/Sessions` cross-correlates each session's audio
+loudness with head-motion energy and prints the lag between them. Near 0 means `words.json` labels land on
+the right motion; sessions off by more than 100 ms are flagged (exit code 1). Needs numpy and macOS
+`afconvert`. Test: `python3 -m unittest discover -s tools -p 'test_*.py'`.
