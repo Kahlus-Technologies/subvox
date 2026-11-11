@@ -134,6 +134,9 @@ private struct RecordingCard: View {
                      : "Motion only — start the mic above to also record audio. Hold Space to mark each utterance.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if recorder.phononMissing {
+                    Text("Talk labels: off (phonon not found)").font(.caption).foregroundStyle(.secondary)
+                }
                 if let error = recorder.error {
                     Text(error).font(.caption).foregroundStyle(.red)
                 }
