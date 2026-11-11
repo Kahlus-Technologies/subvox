@@ -1,6 +1,7 @@
 <p align="center"><img src="docs/banner.png" alt="Subvox: silent speech from AirPods head motion" width="100%"></p>
 
 <p align="center">
+<a href="https://github.com/Kahlus-Technologies/subvox/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Kahlus-Technologies/subvox/actions/workflows/ci.yml/badge.svg"></a>
 <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-1B1F3B">
 <img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI-2B5CFF">
 <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-7CFFD4">
