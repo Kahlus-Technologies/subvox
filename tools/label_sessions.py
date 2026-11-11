@@ -29,8 +29,15 @@ def needs_label(d):
     return d.name.endswith("-dictation") and "Phonon" not in json.loads(words.read_text()).get("model", "")
 
 def label(d):
-    meta = d / "meta.json"
-    offset = (json.loads(meta.read_text()).get("audioStartOffsetSeconds") or 0) if meta.exists() else end_aligned_offset(d)
+    meta = json.loads((d / "meta.json").read_text()) if (d / "meta.json").exists() else {"recovered": True}
+    offset = meta.get("audioStartOffsetSeconds")
+    estimated = offset is None and meta.get("recovered")
+    if estimated:  # crashed session: no meta.json, or the one the app recovers at launch
+        offset = end_aligned_offset(d)
+        print(d.name, f"WARNING: no recorded audio offset, estimated {offset:+.3f}s by aligning the ends")
+    elif offset is None:
+        print(d.name, "WARNING: no recorded audio offset, assuming 0")
+        offset = 0
     out = subprocess.run([phonon, "transcribe", "--json", audio_of(d)], capture_output=True, text=True)
     if out.returncode or not out.stdout.strip():  # CAF left unfinalized by a crash: libsndfile rejects it, CoreAudio reads it
         with tempfile.TemporaryDirectory() as tmp:
@@ -40,8 +47,8 @@ def label(d):
     if out.returncode or not out.stdout.strip():
         raise RuntimeError("phonon failed: " + out.stderr.strip()[-200:])
     j = json.loads(out.stdout)
-    if not meta.exists():
-        j["offsetEstimated"] = "end-aligned (no meta.json)"
+    if estimated:
+        j["offsetEstimated"] = "end-aligned (crashed session)"
     for w in j["words"]:
         w["start"] += offset
         w["end"] += offset

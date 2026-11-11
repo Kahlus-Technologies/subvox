@@ -177,6 +177,37 @@ final class SessionRecorder {
         eventCount += 1
     }
 
+    /// A crash or force quit skips `stop()`, so the session folder has motion.csv but no meta.json and
+    /// tools/label_sessions.py can't tell what it is. Writes a recovered meta.json for each such folder
+    /// that Subvox recorded (name ends in a condition slug). Call at launch, before any recording starts.
+    @discardableResult
+    nonisolated static func recoverCrashedSessions(in root: URL) -> [URL] {
+        let fm = FileManager.default
+        guard let folders = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return [] }
+        var recovered: [URL] = []
+        for dir in folders.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            let motion = dir.appending(path: "motion.csv"), metaURL = dir.appending(path: "meta.json")
+            guard fm.fileExists(atPath: motion.path), !fm.fileExists(atPath: metaURL.path),
+                  let slug = dir.lastPathComponent.split(separator: "-").last,
+                  let condition = Condition.allCases.first(where: { $0.slug == slug }),
+                  let csv = try? String(contentsOf: motion, encoding: .utf8) else { continue }
+            let rows = csv.split(whereSeparator: \.isNewline).dropFirst() // header
+            let lastT = rows.last.flatMap { $0.split(separator: ",").first }.flatMap { Double($0) } ?? 0
+            let meta: [String: Any] = [
+                "condition": condition.rawValue,
+                "durationSeconds": lastT,
+                "motionSamples": rows.count,
+                "recovered": true,
+                "audioStartOffsetSeconds": NSNull(),
+                "note": "Recovered at launch: the app quit before writing meta.json, so the audio offset is unknown.",
+            ]
+            guard let data = try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys]),
+                  (try? data.write(to: metaURL)) != nil else { continue }
+            recovered.append(dir)
+        }
+        return recovered
+    }
+
     private static func makeFile(_ url: URL, header: String) throws -> FileHandle {
         try Data((header + "\n").utf8).write(to: url)
         let handle = try FileHandle(forWritingTo: url)
