@@ -34,6 +34,8 @@ final class SessionRecorder {
     private(set) var eventCount = 0
     private(set) var lastSessionURL: URL?
     private(set) var error: String?
+    /// The last recording with audio found no Phonon-2, so it got no words.json (Talk labels are off).
+    private(set) var phononMissing = false
 
     static var root: URL {
         URL.documentsDirectory.appending(path: "Subvox/Sessions", directoryHint: .isDirectory)
@@ -124,15 +126,33 @@ final class SessionRecorder {
             lastSessionURL = nil
             return
         }
-        if audioInfo != nil { Self.transcribe(directory, audioOffset: meta["audioStartOffsetSeconds"] as? Double ?? 0) }
+        if audioInfo != nil {
+            let phonon = Self.phononURL()
+            phononMissing = phonon == nil
+            if let phonon { Self.transcribe(directory, phonon: phonon, audioOffset: meta["audioStartOffsetSeconds"] as? Double ?? 0) }
+        }
     }
 
-    /// Talk mode labels: runs local Phonon-2 (tools/.venv, see tools/README.md) on the session audio and
-    /// writes words.json with every word's start/end shifted onto the motion.csv clock.
-    nonisolated private static func transcribe(_ dir: URL, audioOffset: Double) {
-        let phonon = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().appending(path: "tools/.venv/bin/phonon")
-        guard FileManager.default.isExecutableFile(atPath: phonon.path) else { return }
+    /// Phonon-2 in the source checkout's tools/.venv (see tools/README.md). Only exists on the build machine.
+    nonisolated static let devPhonon = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().appending(path: "tools/.venv/bin/phonon")
+
+    /// Where Talk mode finds Phonon-2, first executable wins: the SUBVOX_PHONON env var, the `phononPath`
+    /// user default (`defaults write com.aayu.subvox phononPath /path/to/phonon`), then the dev checkout.
+    nonisolated static func phononURL(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        defaults: UserDefaults = .standard,
+        isExecutable: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
+    ) -> URL? {
+        [environment["SUBVOX_PHONON"], defaults.string(forKey: "phononPath"), devPhonon.path]
+            .compactMap { $0 }
+            .first { !$0.isEmpty && isExecutable($0) }
+            .map { URL(filePath: $0) }
+    }
+
+    /// Talk mode labels: runs local Phonon-2 on the session audio and writes words.json with every word's
+    /// start/end shifted onto the motion.csv clock.
+    nonisolated private static func transcribe(_ dir: URL, phonon: URL, audioOffset: Double) {
         DispatchQueue.global(qos: .utility).async {
             let process = Process()
             process.executableURL = phonon
