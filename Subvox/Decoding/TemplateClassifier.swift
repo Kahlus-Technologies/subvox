@@ -78,6 +78,9 @@ struct Evaluation: Sendable {
     /// confusion[actual][predicted]
     var confusion: [[Int]]
     var accuracy: Double
+    /// Train on the first 60% of takes by `createdAt`, test on the rest (as in analysis/score.py). Takes
+    /// recorded back to back look alike, so this is the honest number; leave-one-out overstates it.
+    var timeSplitAccuracy: Double
     /// Accuracy of always guessing the most common label.
     var chance: Double
     var permutationMean: Double
@@ -128,6 +131,11 @@ struct Evaluation: Sendable {
         for (p, a) in zip(predicted, truth) { confusion[a][p] += 1 }
         let observed = accuracy(predicted, truth)
 
+        let byTime = templates.indices.sorted { (templates[$0].createdAt, $0) < (templates[$1].createdAt, $1) }
+        let cut = Int(Double(n) * 0.6)
+        let train = byTime[..<cut], test = byTime[cut...]
+        let timeSplitHits = test.filter { i in truth[train.min { distance[i][$0] < distance[i][$1] }!] == truth[i] }.count
+
         var generator = SystemRandomNumberGenerator()
         var nullAccuracies: [Double] = []
         nullAccuracies.reserveCapacity(permutations)
@@ -142,6 +150,7 @@ struct Evaluation: Sendable {
             labels: labels,
             confusion: confusion,
             accuracy: observed,
+            timeSplitAccuracy: Double(timeSplitHits) / Double(test.count),
             chance: Double(counts.values.max()!) / Double(n),
             permutationMean: nullAccuracies.reduce(0, +) / Double(max(permutations, 1)),
             permutationP95: nullAccuracies.isEmpty ? 0 : nullAccuracies[Int(Double(nullAccuracies.count - 1) * 0.95)],
