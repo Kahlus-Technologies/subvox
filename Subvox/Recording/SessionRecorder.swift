@@ -59,8 +59,9 @@ final class SessionRecorder {
             return
         }
         error = nil
-        let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
-            .replacingOccurrences(of: ":", with: "")
+        // Fractional seconds: the Collect prompter can start a new session within the same second.
+        let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true))
+            .replacingOccurrences(of: ":", with: "").replacingOccurrences(of: ".", with: "-")
         let dir = Self.root.appending(path: "\(stamp)-\(condition.slug)", directoryHint: .isDirectory)
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
