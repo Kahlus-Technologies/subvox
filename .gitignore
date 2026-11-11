@@ -9,4 +9,5 @@ __pycache__/
 dist/
 .drill_since
 *.dmg
+Local.xcconfig
 # Fixed contributor history

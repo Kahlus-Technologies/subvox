@@ -28,10 +28,11 @@ open Subvox.xcodeproj   # ⌘R
 Or from the command line:
 
 ```sh
-xcodebuild -project Subvox.xcodeproj -scheme Subvox -derivedDataPath build -allowProvisioningUpdates build
-open build/Build/Products/Debug/Subvox.app
 xcodebuild -project Subvox.xcodeproj -scheme Subvox -derivedDataPath build test
+open build/Build/Products/Debug/Subvox.app
 ```
+
+Builds are ad-hoc signed by default, so no Apple account is needed. To sign with your own team, put your settings in a gitignored `Local.xcconfig` next to `Signing.xcconfig` (the format is in that file's comments). macOS may ask for Motion and Microphone permission again after a rebuild, because each ad-hoc build has a new signature.
 
 Requires macOS 14+, AirPods Pro or another headphone that supports head tracking, connected as the Mac's audio output. On first launch, grant **Motion**. The mic and speech prompts only appear when you start the mic.
 
@@ -65,7 +66,7 @@ The training set lives at `~/Library/Application Support/Subvox/dataset.json`.
 
 ## Known limits
 
-- Headphone motion is processed and low-rate (roughly 25 Hz on AirPods). The speech-detecting accelerometer and the inward mic are not exposed. Expect jaw and head movement, not vocal vibration.
+- Headphone motion is processed and low-rate (about 50 Hz on AirPods Pro). The speech-detecting accelerometer and the inward mic are not exposed. Expect jaw and head movement, not vocal vibration.
 - Templates are user- and session-specific. Re-seating the AirPods can shift the signal.
 - Choosing AirPods as the mic input switches them to the Bluetooth headset (HFP) profile.
 
