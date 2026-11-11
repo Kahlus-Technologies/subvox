@@ -78,7 +78,3 @@ The training set lives at `~/Library/Application Support/Subvox/dataset.json`.
 | `tools/` | Session labeling with Phonon-2 and the DMG builder. |
 | `dmg/` | DMG window background and `dmgbuild` settings. |
 | `docs/` | README banner. |
-
-## Credits
-
-Started from [joeblau/subvox](https://github.com/joeblau/subvox) (MIT). The recording prompter, talk-mode labeling, scoring scripts and DMG packaging were added on top.
