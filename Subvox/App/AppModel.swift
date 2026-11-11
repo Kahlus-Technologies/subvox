@@ -10,12 +10,14 @@ struct DecodedWord: Identifiable, Hashable {
 @MainActor @Observable
 final class AppModel {
     enum Screen: String, CaseIterable, Identifiable {
+        case collect = "Collect"
         case sensors = "Sensors"
         case train = "Train"
         case decode = "Decode"
         var id: String { rawValue }
         var symbol: String {
             switch self {
+            case .collect: "text.quote"
             case .sensors: "waveform.path.ecg"
             case .train: "square.stack.3d.up"
             case .decode: "text.bubble"
@@ -29,7 +31,7 @@ final class AppModel {
     let capture = CaptureController()
     let recorder = SessionRecorder()
 
-    var screen: Screen = .train {
+    var screen: Screen = .collect {
         didSet { syncCaptureMode() }
     }
 
@@ -97,7 +99,7 @@ final class AppModel {
             decoded.append(DecodedWord(prediction: prediction))
             recorder.logEvent(segment, kind: prediction.accepted ? "decode" : "reject",
                               label: prediction.best?.label ?? "", confidence: prediction.confidence)
-        case .sensors:
+        case .sensors, .collect:
             recorder.logEvent(segment, kind: "segment", label: recorder.prompt, confidence: nil)
         }
     }
@@ -129,6 +131,7 @@ final class AppModel {
         case .train: return selectedWord != nil
         case .decode: return decodeMode == .hold && classifier != nil
         case .sensors: return recorder.isRecording
+        case .collect: return false
         }
     }
 

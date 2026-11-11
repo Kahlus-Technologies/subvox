@@ -27,6 +27,7 @@ final class SessionRecorder {
 
     var condition: Condition = .silent
     var prompt = ""
+    var speaker = ""
     private(set) var isRecording = false
     private(set) var startedAt: Date?
     private(set) var motionCount = 0
@@ -86,7 +87,7 @@ final class SessionRecorder {
         isRecording = true
     }
 
-    func stop() {
+    func stop(discard: Bool = false) {
         guard isRecording, let directory else { return }
         isRecording = false
         if let sinkID { sink?.remove(sinkID) }
@@ -101,6 +102,7 @@ final class SessionRecorder {
         let meta: [String: Any] = [
             "condition": condition.rawValue,
             "prompt": prompt,
+            "speaker": speaker,
             "startedAt": startedAt?.ISO8601Format() ?? "",
             "startUptime": startUptime,
             "durationSeconds": ProcessInfo.processInfo.systemUptime - startUptime,
@@ -116,6 +118,11 @@ final class SessionRecorder {
         }
         lastSessionURL = directory
         self.directory = nil
+        if discard {
+            try? FileManager.default.removeItem(at: directory)
+            lastSessionURL = nil
+            return
+        }
         if audioInfo != nil { Self.transcribe(directory, audioOffset: meta["audioStartOffsetSeconds"] as? Double ?? 0) }
     }
 
