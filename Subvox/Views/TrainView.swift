@@ -53,8 +53,17 @@ struct TrainView: View {
     }
 
     private var capturePanel: some View {
+        @Bindable var model = model
         let word = model.selectedWord ?? "—"
         return VStack(alignment: .leading, spacing: 10) {
+            Toggle("Drill: shuffle words after every take (recommended, gives honest accuracy)", isOn: $model.drill)
+                .toggleStyle(.switch)
+            if model.drill {
+                Text(word)
+                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 6)
+            }
             Text("Silently mouth “\(word)” while holding Space. Keep your head still; aim for 8–10 takes per word.")
                 .foregroundStyle(.secondary)
             HoldToCaptureButton(

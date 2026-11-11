@@ -155,6 +155,25 @@ final class AppModel {
         dataset.templates.append(template)
         lastTemplateID = template.id
         persist()
+        if drill { advanceDrill() }
+    }
+
+    // MARK: Drill: random word order, so takes of one word are spread over the session
+    // (block-recorded takes look alike because head and earbud fit drift over minutes).
+
+    var drill = false {
+        didSet { if drill { advanceDrill() } }
+    }
+
+    private func advanceDrill() {
+        let words = dataset.vocabulary
+        guard words.count > 1 else { selectedWord = words.first; return }
+        // Pick a different word than the last one, favouring words with fewer takes.
+        let counts = Dictionary(grouping: dataset.templates, by: \.label).mapValues(\.count)
+        let candidates = words.filter { $0 != selectedWord }
+        let minCount = candidates.map { counts[$0] ?? 0 }.min() ?? 0
+        let pool = candidates.filter { (counts[$0] ?? 0) <= minCount + 2 }
+        selectedWord = (pool.isEmpty ? candidates : pool).randomElement()
     }
 
     func deleteTemplate(_ id: Template.ID) {
