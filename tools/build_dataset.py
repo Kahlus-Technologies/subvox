@@ -2,7 +2,8 @@
 
 Every session with motion.csv and words.json gives one row per spoken word: speaker, session, prompt,
 word, start, end and the motion samples inside [start, end] (the 9 channels ax ay az rx ry rz pitch roll
-yaw, float32). Words are lowercased with punctuation stripped. Needs only numpy.
+yaw, float32). Words are lowercased with punctuation stripped except apostrophes ("don't"), the same
+vocabulary as tools/align_phones.py. Needs only numpy.
 
 Usage: python3 tools/build_dataset.py ROOT [ROOT ...] [--out DIR]
     ROOT: a folder of session folders, e.g. ~/Documents/Subvox/Sessions or an unzipped export's Sessions/.
