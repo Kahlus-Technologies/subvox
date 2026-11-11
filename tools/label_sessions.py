@@ -6,9 +6,16 @@ phonon = pathlib.Path(sys.executable).parent / "phonon"
 for d in sorted(root.iterdir()):
     if not (d / "audio.caf").exists() or (d / "words.json").exists():
         continue
-    offset = json.loads((d / "meta.json").read_text()).get("audioStartOffsetSeconds") or 0
+    meta = d / "meta.json"  # missing after a crash (#6): assume audio started with motion
+    offset = (json.loads(meta.read_text()).get("audioStartOffsetSeconds") or 0) if meta.exists() else 0
     out = subprocess.run([phonon, "transcribe", "--json", d / "audio.caf"], capture_output=True, text=True)
+    if out.returncode or not out.stdout.strip():  # CAF left unfinalized by a crash: libsndfile rejects it, CoreAudio reads it
+        wav = d / "audio.recovered.wav"
+        subprocess.run(["afconvert", "-f", "WAVE", "-d", "LEI16@16000", "-c", "1", d / "audio.caf", wav], check=True)
+        out = subprocess.run([phonon, "transcribe", "--json", wav], capture_output=True, text=True)
     j = json.loads(out.stdout)
+    if not meta.exists():
+        j["offsetAssumed"] = True
     for w in j["words"]:
         w["start"] += offset
         w["end"] += offset
