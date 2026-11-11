@@ -49,6 +49,14 @@ final class SessionRecorder {
 
     func start(audio: AudioService) {
         guard !isRecording else { return }
+        // Talk-mode labels need audio: if the mic is off, turn it on first, then start recording.
+        if !audio.isRunning {
+            Task {
+                await audio.start()
+                start(audio: audio)
+            }
+            return
+        }
         error = nil
         let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
             .replacingOccurrences(of: ":", with: "")
