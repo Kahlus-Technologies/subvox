@@ -70,6 +70,7 @@ final class AppModel {
     func start() {
         guard !started else { return }
         started = true
+        SessionRecorder.recoverCrashedSessions(in: SessionRecorder.root)
         motion.onSample = { [weak self] sample in self?.ingest(sample) }
         capture.onSegment = { [weak self] segment in self?.handleSegment(segment) }
         motion.start()
