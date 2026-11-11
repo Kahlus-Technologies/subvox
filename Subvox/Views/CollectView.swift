@@ -7,6 +7,9 @@ struct CollectView: View {
     @AppStorage("collectIndex") private var index = 0
     @AppStorage("collectName") private var name = ""
     @State private var done = 0
+    @State private var mine: [SessionExport.Entry] = []
+    @State private var isExporting = false
+    @State private var exportProblem: String?
 
     private var sentence: String { Prompts.harvard[index % Prompts.harvard.count] }
 
@@ -58,12 +61,24 @@ struct CollectView: View {
                     HStack {
                         Text("Zip your recordings and send the file to Aayu.").foregroundStyle(.secondary)
                         Spacer()
-                        Button("Export recordings…") { export() }.disabled(recorder.isRecording)
+                        let minutes = mine.compactMap(\.durationSeconds).reduce(0, +) / 60
+                        Text("\(mine.count) recordings · \(minutes, format: .number.precision(.fractionLength(1))) min")
+                            .foregroundStyle(.secondary).monospacedDigit()
+                        if isExporting { ProgressView().controlSize(.small) }
+                        Button("Export recordings…") { export() }.disabled(recorder.isRecording || isExporting)
                     }
                     .padding(6)
                 }
             }
             .padding(20)
+        }
+        .task(id: "\(name)|\(recorder.isRecording)") {
+            let speaker = name, root = SessionRecorder.root
+            mine = await Task.detached { SessionExport.entries(in: root, speaker: speaker) }.value
+        }
+        .alert("Couldn't export", isPresented: Binding(get: { exportProblem != nil }, set: { if !$0 { exportProblem = nil } })) {
+        } message: {
+            Text(exportProblem ?? "")
         }
     }
 
@@ -97,12 +112,25 @@ struct CollectView: View {
         let stamp = Date().formatted(.iso8601.year().month().day())
         let safe = name.isEmpty ? "subvox" : name.lowercased().filter(\.isLetter)
         let out = URL.desktopDirectory.appending(path: "subvox-\(safe)-\(stamp).zip")
-        try? FileManager.default.removeItem(at: out)
-        let p = Process()
-        p.executableURL = URL(filePath: "/usr/bin/ditto")
-        p.arguments = ["-c", "-k", "--keepParent", SessionRecorder.root.path, out.path]
-        try? p.run()
-        p.waitUntilExit()
-        NSWorkspace.shared.activateFileViewerSelecting([out])
+        let speaker = name.trimmingCharacters(in: .whitespaces), root = SessionRecorder.root
+        isExporting = true
+        Task {
+            defer { isExporting = false }
+            do {
+                let entries = try await Task.detached {
+                    let entries = SessionExport.entries(in: root, speaker: speaker)
+                    if !entries.isEmpty { try SessionExport.export(entries, speaker: speaker, from: root, to: out) }
+                    return entries
+                }.value
+                mine = entries
+                if entries.isEmpty {
+                    exportProblem = "There are no recordings for \"\(speaker)\" yet. Check the name in step 1."
+                } else {
+                    NSWorkspace.shared.activateFileViewerSelecting([out])
+                }
+            } catch {
+                exportProblem = error.localizedDescription
+            }
+        }
     }
 }
