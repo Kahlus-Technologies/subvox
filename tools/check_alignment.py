@@ -62,6 +62,8 @@ def check(d):
     motion = np.interp(grid, m[:, 0], np.linalg.norm(m[:, 1:], axis=1))
     loud = np.interp(grid, env_t + offset, env, left=0, right=0)
     lag, r = best_lag(loud, motion, int(MAX_LAG * RATE))
+    if not np.isfinite(r):
+        raise ValueError("audio or motion is flat, nothing to correlate")
     return lag / RATE, r
 
 
