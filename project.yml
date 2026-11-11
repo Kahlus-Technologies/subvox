@@ -1,13 +1,13 @@
 name: Subvox
 options:
-  bundleIdPrefix: com.joeblau
+  bundleIdPrefix: com.aayu
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    DEVELOPMENT_TEAM: K78G42H4U2
+    DEVELOPMENT_TEAM: 94KYLL93PM
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
@@ -26,7 +26,7 @@ targets:
         NSSpeechRecognitionUsageDescription: Subvox transcribes microphone audio on-device as a reference for the motion decoder.
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.joeblau.subvox
+        PRODUCT_BUNDLE_IDENTIFIER: com.aayu.subvox
         CODE_SIGN_IDENTITY: Apple Development
         ENABLE_HARDENED_RUNTIME: NO
   SubvoxTests:
@@ -37,7 +37,7 @@ targets:
       - target: Subvox
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.joeblau.subvox.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.aayu.subvox.tests
         GENERATE_INFOPLIST_FILE: YES
 schemes:
   Subvox:
