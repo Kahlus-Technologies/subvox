@@ -108,6 +108,38 @@ final class SessionRecorder {
         }
         lastSessionURL = directory
         self.directory = nil
+        if audioInfo != nil { Self.transcribe(directory, audioOffset: meta["audioStartOffsetSeconds"] as? Double ?? 0) }
+    }
+
+    /// Talk mode labels: runs local Phonon-2 (tools/.venv, see tools/README.md) on the session audio and
+    /// writes words.json with every word's start/end shifted onto the motion.csv clock.
+    nonisolated private static func transcribe(_ dir: URL, audioOffset: Double) {
+        let phonon = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appending(path: "tools/.venv/bin/phonon")
+        guard FileManager.default.isExecutableFile(atPath: phonon.path) else { return }
+        DispatchQueue.global(qos: .utility).async {
+            let process = Process()
+            process.executableURL = phonon
+            process.arguments = ["transcribe", "--json", dir.appending(path: "audio.caf").path]
+            let out = Pipe()
+            process.standardOutput = out
+            process.standardError = FileHandle.nullDevice
+            guard (try? process.run()) != nil else { return }
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard var json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let words = json["words"] as? [[String: Any]] else { return }
+            json["words"] = words.map { word in
+                var w = word
+                w["start"] = (word["start"] as? Double ?? 0) + audioOffset
+                w["end"] = (word["end"] as? Double ?? 0) + audioOffset
+                return w
+            }
+            json["clock"] = "start/end are on the motion.csv t clock"
+            if let outData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]) {
+                try? outData.write(to: dir.appending(path: "words.json"))
+            }
+        }
     }
 
     func record(_ sample: MotionSample) {
