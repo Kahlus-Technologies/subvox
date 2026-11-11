@@ -7,3 +7,5 @@ tools/.venv/
 tools/t.*
 __pycache__/
 dist/
+.drill_since
+*.dmg

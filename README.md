@@ -1,8 +1,20 @@
-# Subvox
+<p align="center"><img src="docs/banner.png" alt="Subvox: silent speech from AirPods head motion" width="100%"></p>
+
+<p align="center">
+<img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-1B1F3B">
+<img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI-2B5CFF">
+<img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-7CFFD4">
+</p>
 
 A macOS prototype that tests whether AirPods Pro head-motion data (`CMHeadphoneMotionManager`) carries enough information to turn **silently mouthed words into text**.
 
 It doesn't use a language model. It's a small-vocabulary template recognizer plus a statistical test that tells you whether the signal is real.
+
+## Install
+
+Grab `Subvox.dmg` from [Releases](../../releases), drag Subvox into Applications, then right-click it and choose **Open** the first time. The app is ad-hoc signed, not notarized.
+
+To build the DMG yourself: `tools/make_dmg.sh` (needs `uv`, which fetches `dmgbuild`), output in `dist/Subvox.dmg`.
 
 ## Build & run
 
@@ -55,3 +67,18 @@ The training set lives at `~/Library/Application Support/Subvox/dataset.json`.
 - Headphone motion is processed and low-rate (roughly 25 Hz on AirPods). The speech-detecting accelerometer and the inward mic are not exposed. Expect jaw and head movement, not vocal vibration.
 - Templates are user- and session-specific. Re-seating the AirPods can shift the signal.
 - Choosing AirPods as the mic input switches them to the Bluetooth headset (HFP) profile.
+
+## Repo layout
+
+| Path | What |
+|---|---|
+| `Subvox/` | The SwiftUI app (motion, audio, decoding, recording, views). |
+| `SubvoxTests/` | Unit tests. |
+| `analysis/` | Offline scoring scripts (`score.py`, `clean_test.py`, `dist_check.py`). They read `dataset.json` and need `numpy` and `numba`. |
+| `tools/` | Session labeling with Phonon-2 and the DMG builder. |
+| `dmg/` | DMG window background and `dmgbuild` settings. |
+| `docs/` | README banner. |
+
+## Credits
+
+Started from [joeblau/subvox](https://github.com/joeblau/subvox) (MIT). The recording prompter, talk-mode labeling, scoring scripts and DMG packaging were added on top.
