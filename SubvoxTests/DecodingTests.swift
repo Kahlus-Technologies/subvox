@@ -56,6 +56,26 @@ final class DecodingTests: XCTestCase {
         XCTAssertGreaterThan(null.pValue, 0.01)
     }
 
+    func testTimeSplitFollowsCreatedAtAndCatchesDrift() throws {
+        // A re-seat after take 12: later takes carry an extra sway on rz and the two words' rhythms swap.
+        // Neighbours in time still match, so leave-one-out stays high; training on early takes fails on late ones.
+        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        var templates: [Template] = []
+        for k in 0..<20 {
+            let late = k >= 12, yes = k % 2 == 0
+            var samples = take(yes == late ? 3 : 2, axis: 0)
+            if late {
+                let sway = take(1, axis: 2, noise: 0)
+                for i in samples.indices { samples[i].rz += sway[i].rz }
+            }
+            templates.append(Template(label: yes ? "yes" : "no", samples: samples, createdAt: start + Double(k) * 20))
+        }
+        // Newest first: the split has to follow createdAt, not array order.
+        let result = try XCTUnwrap(Evaluation.run(templates: templates.reversed(), featureSet: .rotation, permutations: 0))
+        XCTAssertGreaterThan(result.accuracy, 0.9)
+        XCTAssertLessThan(result.timeSplitAccuracy, 0.2)
+    }
+
     func testTrimDropsQuietPadding() {
         let quiet = (0..<20).map { MotionSample(t: Double($0) / 25) }
         let burst = take(2, axis: 0, noise: 0).map { s -> MotionSample in

@@ -185,10 +185,14 @@ private struct EvaluationResultView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 24) {
                 metric("Accuracy", percent(result.accuracy), highlight: true)
+                metric("Time split", percent(result.timeSplitAccuracy), highlight: true)
                 metric("Chance", percent(result.chance))
                 metric("Shuffled 95th pct", percent(result.permutationP95))
                 metric("p-value", result.pValue < 0.001 ? "< 0.001" : String(format: "%.3f", result.pValue))
             }
+            Text("Time split trains on your first 60% of takes and tests on the later ones. It's the honest number, since back-to-back takes look alike.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Text(verdict)
                 .font(.callout)
                 .foregroundStyle(result.pValue < 0.05 ? .green : .orange)
