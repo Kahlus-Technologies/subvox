@@ -1,10 +1,20 @@
-<p align="center"><img src="docs/banner.png" alt="Subvox: silent speech from AirPods head motion" width="100%"></p>
+<div align="center">
 
-<p align="center">
-<img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-1B1F3B">
-<img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI-2B5CFF">
-<img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-7CFFD4">
-</p>
+<img src="docs/banner.png" alt="Subvox: real AirPods Pro head motion around silently mouthed speech" width="900">
+
+<p><strong>Can AirPods hear you mouth words?</strong><br>
+A macOS prototype that tests whether head-motion data carries enough signal to turn silent speech into text.</p>
+
+<img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-111111?style=flat-square">
+<img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI-111111?style=flat-square&logo=swift&logoColor=white">
+<img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square">
+<img alt="Status: research" src="https://img.shields.io/badge/status-research-555555?style=flat-square">
+
+<sub>One real recording, 30 s. Rendered by <code>scripts/make_readme_hero.py</code>.</sub>
+
+</div>
+
+---
 
 A macOS prototype that tests whether AirPods Pro head-motion data (`CMHeadphoneMotionManager`) carries enough information to turn **silently mouthed words into text**.
 
@@ -78,6 +88,7 @@ The training set lives at `~/Library/Application Support/Subvox/dataset.json`.
 | `tools/` | Session labeling with Phonon-2 and the DMG builder. |
 | `dmg/` | DMG window background and `dmgbuild` settings. |
 | `docs/` | README banner. |
+| `scripts/` | `make_readme_hero.py` renders the banner from a real session. |
 
 ## Credits
 
