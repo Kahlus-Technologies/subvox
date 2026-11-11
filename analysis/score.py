@@ -4,16 +4,18 @@
 3. Time split: train on the first 60% of takes (by createdAt), test on the last 40%.
    This is closer to real use, since neighbouring takes recorded back to back look alike.
 4. Head-motion control: does mere clip length or total head movement separate the words?
+Usage: python3 analysis/score.py [--dataset PATH] [--since CREATED_AT]
 """
 import json, random
 import numpy as np
 from numba import njit
 
-d = json.load(open("/Users/aayu/Library/Application Support/Subvox/dataset.json"))
-import sys
+from clean_test_lib import parse_args
+args = parse_args(__doc__)
+d = json.load(open(args.dataset))
 ALL = sorted(d["templates"], key=lambda t: t["createdAt"])
-# `python score.py since <unix-ish createdAt>` scores only takes recorded after that point (drill sessions).
-T = [t for t in ALL if len(sys.argv) < 3 or t["createdAt"] > float(sys.argv[2])]
+# --since <createdAt> scores only takes recorded after that point (drill sessions).
+T = [t for t in ALL if args.since is None or t["createdAt"] > args.since]
 words = sorted({t["label"] for t in T})
 y = np.array([words.index(t["label"]) for t in T])
 ts0 = np.array([s["t"] for s in T[0]["samples"]])

@@ -76,7 +76,7 @@ The training set lives at `~/Library/Application Support/Subvox/dataset.json`.
 |---|---|
 | `Subvox/` | The SwiftUI app (motion, audio, decoding, recording, views). |
 | `SubvoxTests/` | Unit tests. |
-| `analysis/` | Offline scoring scripts (`score.py`, `clean_test.py`, `dist_check.py`). They read `dataset.json` and need `numpy` and `numba`. |
+| `analysis/` | Offline scoring scripts (`score.py`, `clean_test.py`, `dist_check.py`). They read the app's `dataset.json` (or `--dataset PATH`) and need `numpy` and `numba` (`analysis/requirements.txt`). `sh analysis/smoke_test.sh` runs them on a small synthetic dataset. |
 | `tools/` | Session labeling with Phonon-2 and the DMG builder. |
 | `dmg/` | DMG window background and `dmgbuild` settings. |
 | `docs/` | README banner. |

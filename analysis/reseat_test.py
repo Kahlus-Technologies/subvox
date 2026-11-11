@@ -1,8 +1,8 @@
 """Real-data check of plan step 3: train on wear 0, test on wear 1 (AirPods re-seated). DTW-1NN like the app."""
 import json, sys, pathlib, numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from clean_test_lib import dtw, trim_idx, smooth, energy, raw
-d = json.load(open("/Users/aayu/Library/Application Support/Subvox/dataset.json"))
+from clean_test_lib import dtw, trim_idx, smooth, energy, raw, parse_args
+d = json.load(open(parse_args(__doc__).dataset))
 T = sorted(d["templates"], key=lambda t: t["createdAt"])
 c = np.array([t["createdAt"] for t in T]); wear = np.concatenate([[0], np.cumsum(np.diff(c) > 180)])
 words = sorted({t["label"] for t in T}); y = np.array([words.index(t["label"]) for t in T])
