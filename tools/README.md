@@ -18,3 +18,10 @@ for every labelled session. Setup and usage are in the file's docstring. Unknown
 pronunciation so nothing collapses into a phone-less `spn`. Checked on 2 sessions: 0 unknown words left,
 39 of the 39 ARPAbet phonemes seen, vowels land on audio energy peaks and stops in dips, word starts
 within 35-50 ms (median) of Phonon's.
+
+## Word dataset for training
+
+`python3 tools/build_dataset.py ~/Documents/Subvox/Sessions path/to/unzipped/export/Sessions --out subvox-dataset`
+turns every session with `motion.csv` and `words.json` into `subvox-dataset/words.npz` (one row per spoken
+word with its motion slice) and `subvox-dataset/summary.txt` (sessions, speakers, minutes, words, and
+sessions skipped and why). Needs numpy only. Test: `python3 -m unittest discover -s tools -p 'test_*.py'`.
