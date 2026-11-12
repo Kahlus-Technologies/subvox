@@ -32,7 +32,7 @@ struct Prediction: Hashable, Sendable {
 /// there at all, not how far a big model can push it.
 struct TemplateClassifier: Sendable {
     let featureSet: FeatureSet
-    private let entries: [(label: String, frames: [[Double]])]
+    private let entries: [(label: String, frames: DTW.Frames)]
     private let scales: [Double]
 
     var labels: [String] { Array(Set(entries.map(\.label))).sorted() }
@@ -44,18 +44,21 @@ struct TemplateClassifier: Sendable {
         let scales = MotionFeatures.channelScales(raw)
         self.featureSet = featureSet
         self.scales = scales
-        self.entries = zip(templates, raw).map { ($0.label, MotionFeatures.scaled($1, by: scales)) }
+        self.entries = zip(templates, raw).map { ($0.label, DTW.Frames(MotionFeatures.scaled($1, by: scales))) }
     }
 
     func rank(_ samples: [MotionSample]) -> [RankedLabel] {
-        let query = MotionFeatures.scaled(
-            MotionFeatures.frames(MotionFeatures.trim(samples), set: featureSet), by: scales)
+        let query = DTW.Frames(MotionFeatures.scaled(
+            MotionFeatures.frames(MotionFeatures.trim(samples), set: featureSet), by: scales))
+        // The DTW calls run in parallel; the per-word minimum is then taken in template order, as before.
+        let distances = [Double](concurrentlyMapping: entries.count) { DTW.distance(query, entries[$0].frames) }
         var best: [String: Double] = [:]
-        for entry in entries {
-            let d = DTW.distance(query, entry.frames)
+        for (entry, d) in zip(entries, distances) {
             best[entry.label] = min(best[entry.label] ?? .infinity, d)
         }
-        return best.map { RankedLabel(label: $0.key, distance: $0.value) }.sorted { $0.distance < $1.distance }
+        // Equal distances, such as all-infinite ones for an empty segment, sort by label, not hash order.
+        return best.map { RankedLabel(label: $0.key, distance: $0.value) }
+            .sorted { ($0.distance, $0.label) < ($1.distance, $1.label) }
     }
 
     func predict(_ samples: [MotionSample], maxDistance: Double, minConfidence: Double) -> Prediction {
@@ -96,18 +99,11 @@ struct Evaluation: Sendable {
 
         let raw = templates.map { MotionFeatures.frames(MotionFeatures.trim($0.samples), set: featureSet) }
         let scales = MotionFeatures.channelScales(raw)
-        let seqs = raw.map { MotionFeatures.scaled($0, by: scales) }
+        let seqs = raw.map { DTW.Frames(MotionFeatures.scaled($0, by: scales)) }
         let n = seqs.count
 
         // Pairwise distances once; every labelling (true or permuted) reuses them.
-        var distance = [[Double]](repeating: [Double](repeating: 0, count: n), count: n)
-        for i in 0..<n {
-            for j in (i + 1)..<max(i + 1, n) {
-                let d = DTW.distance(seqs[i], seqs[j])
-                distance[i][j] = d
-                distance[j][i] = d
-            }
-        }
+        let distance = pairwiseDistances(seqs)
 
         let index = Dictionary(uniqueKeysWithValues: labels.enumerated().map { ($1, $0) })
         let truth = templates.map { index[$0.label]! }
@@ -157,5 +153,36 @@ struct Evaluation: Sendable {
             pValue: Double(atLeast + 1) / Double(permutations + 1),
             permutations: permutations,
             templateCount: n)
+    }
+
+    /// Symmetric DTW distance matrix with a zero diagonal. Entry [i][j] for i < j is
+    /// `DTW.distance(seqs[i], seqs[j])`, mirrored to [j][i]. Rows run in parallel.
+    static func pairwiseDistances(_ seqs: [DTW.Frames]) -> [[Double]] {
+        let n = seqs.count
+        let upper = [[Double]](concurrentlyMapping: n) { i in
+            ((i + 1)..<n).map { j in DTW.distance(seqs[i], seqs[j]) }
+        }
+        var distance = [[Double]](repeating: [Double](repeating: 0, count: n), count: n)
+        for i in 0..<n {
+            for (offset, d) in upper[i].enumerated() {
+                distance[i][i + 1 + offset] = d
+                distance[i + 1 + offset][i] = d
+            }
+        }
+        return distance
+    }
+}
+
+private extension Array {
+    /// `(0..<count).map(make)`, with the calls spread across all cores. Results keep index order.
+    /// `make` runs on several threads at once, so it must only read shared state.
+    init(concurrentlyMapping count: Int, _ make: (Int) -> Element) {
+        self.init(unsafeUninitializedCapacity: count) { buffer, initialized in
+            guard let base = buffer.baseAddress else { return }
+            DispatchQueue.concurrentPerform(iterations: count) { i in
+                (base + i).initialize(to: make(i))
+            }
+            initialized = count
+        }
     }
 }
