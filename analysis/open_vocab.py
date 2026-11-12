@@ -5,7 +5,8 @@ Every word is scored by a model that never saw its session (or its speaker):
    channels. It can only name words that occur in training, so the "seen" column is its ceiling.
 2. CTC: a small 1D-CNN + GRU reads a word's motion and spells its ARPAbet phonemes (trained with CTC loss), so
    it can spell unseen words. For word accuracy its spelling is snapped to the closest pronunciation in the
-   word list of the whole dataset.
+   word list of the whole dataset, test words included. That word accuracy is closed-set; CER is the
+   open-vocabulary measure.
 Splits: held-out sessions (each speaker's sessions in time order, cut into --folds blocks, so a sentence
 recorded seconds earlier in the same fit never trains its neighbour; --folds 0 is leave-one-session-out) and
 held-out speakers (leave-one-speaker-out, when there are 2+ speakers).
@@ -14,7 +15,7 @@ label-shuffle standard of score.py. p is the share of shuffles that score at lea
 Results from speakers named "Synthetic ..." (analysis/fixtures/make_sessions.py) are labelled synthetic.
 
 Input: --sessions ROOT [ROOT ...] (folders of session folders, read with tools/build_dataset.py) or --npz
-words.npz (written by tools/build_dataset.py). Phonemes come from each session's phones.json
+words.npz (written by tools/build_dataset.py). Silent takes (paired Collect) are left out. Phonemes come from each session's phones.json
 (tools/align_phones.py), else from --lexicon FILE, a CMUdict-format pronunciation file you supply (lines in
 MFA .dict layout, with probability columns before the phones, are read too). words.npz has no folder paths, so
 with --npz phonemes come from --lexicon only and word times from words.json.
@@ -66,12 +67,18 @@ def load(args):
         o = z["offsets"]
         rows = [dict(speaker=str(z["speaker"][i]), session=str(z["session"][i]), word=str(z["word"][i]),
                      start=float(z["start"][i]), end=float(z["end"][i]), motion=z["motion"][o[i]:o[i + 1]])
-                for i in range(len(o) - 1)]
+                for i in range(len(o) - 1) if "labels_from" not in z.files or not z["labels_from"][i]]
         aligned = []
     else:
         rows, summary = build(args.sessions)
         print(summary, end="")
         aligned, _ = build(args.sessions, "phones.json")
+        # Silent takes borrow their spoken partner's words (labels_from) and have no phones.json of their own.
+        # This is talk-mode data, so they are left out.
+        silent = {r["session"] for r in rows if r["labels_from"]}
+        rows, aligned = ([r for r in rs if not r["labels_from"]] for rs in (rows, aligned))
+        if silent:
+            print(f"left out {len(silent)} silent takes")
         folders = {d.name: d for root in args.sessions for d in root.expanduser().iterdir() if d.is_dir()}
         timed = {r["session"] for r in aligned}
         rows = aligned + [r for r in rows if r["session"] not in timed]

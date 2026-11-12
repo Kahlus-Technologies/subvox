@@ -3,7 +3,8 @@
 Needs requirements.txt; the end-to-end test also needs requirements-ml.txt (torch) and is skipped without it.
 All data here is synthetic (analysis/fixtures/make_sessions.py): it checks the wiring, not AirPods.
 """
-import contextlib, importlib.util, io, pathlib, subprocess, sys, tempfile, unittest
+import argparse, contextlib, importlib.util, io, json, pathlib, subprocess, sys, tempfile, unittest
+import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -40,6 +41,33 @@ class ResultsFileTest(unittest.TestCase):
             open_vocab.write_results(f, "real", "numbers\n")
             self.assertEqual(f.read_text(), f"# Results\n\n{open_vocab.HEADING}\n\n<!-- open_vocab.py real -->\n"
                                             "numbers\n<!-- /open_vocab.py real -->\n")
+
+
+class SilentTakeTest(unittest.TestCase):
+    def test_paired_silent_take_is_left_out(self):
+        """A silent take borrows its spoken partner's words but has no phones.json; loading must not fail on it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            t = np.arange(100) / 50
+            motion = np.column_stack([t, np.sin(np.outer(t, np.arange(1, 10)))] + [np.zeros((100, 7))])
+            words = [{"text": "the", "start": 0.2, "end": 0.5}, {"text": "canoe", "start": 0.6, "end": 1.2}]
+            for name, condition in (("s1-normal", "Normal speech"), ("s1-silent", "Silent mouthing")):
+                d = root / name
+                d.mkdir()
+                np.savetxt(d / "motion.csv", motion, delimiter=",", comments="",
+                           header="t,ax,ay,az,rx,ry,rz,pitch,roll,yaw,gx,gy,gz,qw,qx,qy,qz")
+                (d / "meta.json").write_text(json.dumps({"speaker": "A", "prompt": "The canoe", "pairId": "p1",
+                                                         "condition": condition}))
+                (d / "words.json").write_text(json.dumps({"words": words}))
+            (root / "s1-normal" / "phones.json").write_text(json.dumps({"words": words, "phones": [
+                {"phone": "DH", "start": 0.2, "end": 0.35}, {"phone": "AH0", "start": 0.35, "end": 0.5},
+                {"phone": "K", "start": 0.6, "end": 0.8}, {"phone": "AH0", "start": 0.8, "end": 0.95},
+                {"phone": "N", "start": 0.95, "end": 1.05}, {"phone": "UW1", "start": 1.05, "end": 1.2}]}))
+            with contextlib.redirect_stdout(io.StringIO()) as log:
+                rows, source = open_vocab.load(argparse.Namespace(npz=None, sessions=[root], lexicon=None))
+            self.assertIn("left out 1 silent takes", log.getvalue())
+            self.assertEqual([(r["session"], r["word"], r["phones"]) for r in rows],
+                             [("s1-normal", "the", ["DH", "AH"]), ("s1-normal", "canoe", ["K", "AH", "N", "UW"])])
 
 
 @unittest.skipUnless(importlib.util.find_spec("torch"), "needs torch: pip install -r analysis/requirements-ml.txt")
