@@ -8,7 +8,7 @@ import Observation
 ///   motion.csv  — every headphone-motion sample, t relative to session start
 ///   audio.caf   — microphone audio (if the mic is running)
 ///   events.csv  — captured segments with their label / prediction
-///   meta.json   — condition, prompt, clock offsets
+///   meta.json   — condition, prompt, clock offsets, pairId for Collect's paired takes
 @MainActor @Observable
 final class SessionRecorder {
     enum Condition: String, CaseIterable, Identifiable, Codable {
@@ -28,6 +28,9 @@ final class SessionRecorder {
     var condition: Condition = .silent
     var prompt = ""
     var speaker = ""
+    /// Links a Collect sentence's spoken and silent takes (see CollectTake). Written to meta.json, then
+    /// cleared by `stop()` so a later recording from another screen isn't tagged with it.
+    var pairId: String?
     private(set) var isRecording = false
     private(set) var startedAt: Date?
     private(set) var motionCount = 0
@@ -102,7 +105,28 @@ final class SessionRecorder {
         motionHandle = nil
         eventsHandle = nil
 
-        let meta: [String: Any] = [
+        let meta = metaFields(audio: audioInfo)
+        Self.writeMeta(meta, to: directory)
+        pairId = nil
+        lastSessionURL = directory
+        self.directory = nil
+        if discard {
+            try? FileManager.default.removeItem(at: directory)
+            lastSessionURL = nil
+            return
+        }
+        // A silent take has no speech for Phonon to hear. Its labels come from its paired spoken take
+        // (tools/build_dataset.py), so it gets no words.json of its own.
+        if audioInfo != nil, condition != .silent {
+            let phonon = Self.phononURL()
+            phononMissing = phonon == nil
+            if let phonon { Self.transcribe(directory, phonon: phonon, audioOffset: meta["audioStartOffsetSeconds"] as? Double ?? 0) }
+        }
+    }
+
+    /// meta.json for the session being stopped. `audio` is nil when no audio was written.
+    func metaFields(audio: AudioFileWriter.Info?) -> [String: Any] {
+        var meta: [String: Any] = [
             "condition": condition.rawValue,
             "prompt": prompt,
             "speaker": speaker,
@@ -112,25 +136,20 @@ final class SessionRecorder {
             "motionSamples": motionCount,
             "events": eventCount,
             "audioDevice": audioDeviceName ?? NSNull(),
-            "audioSampleRate": audioInfo?.sampleRate ?? NSNull(),
-            "audioStartOffsetSeconds": audioInfo?.firstHostSeconds.map { $0 - startUptime } ?? NSNull(),
+            "audioSampleRate": audio?.sampleRate ?? NSNull(),
+            "audioStartOffsetSeconds": audio?.firstHostSeconds.map { $0 - startUptime } ?? NSNull(),
             "note": "Motion t and audioStartOffsetSeconds are relative to startUptime (seconds since boot).",
         ]
-        if let data = try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: directory.appending(path: "meta.json"))
+        if let pairId { meta["pairId"] = pairId }
+        return meta
+    }
+
+    @discardableResult
+    nonisolated static func writeMeta(_ meta: [String: Any], to dir: URL) -> Bool {
+        guard let data = try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys]) else {
+            return false
         }
-        lastSessionURL = directory
-        self.directory = nil
-        if discard {
-            try? FileManager.default.removeItem(at: directory)
-            lastSessionURL = nil
-            return
-        }
-        if audioInfo != nil {
-            let phonon = Self.phononURL()
-            phononMissing = phonon == nil
-            if let phonon { Self.transcribe(directory, phonon: phonon, audioOffset: meta["audioStartOffsetSeconds"] as? Double ?? 0) }
-        }
+        return (try? data.write(to: dir.appending(path: "meta.json"))) != nil
     }
 
     /// Phonon-2 in the source checkout's tools/.venv (see tools/README.md). Only exists on the build machine.
@@ -221,8 +240,7 @@ final class SessionRecorder {
                 "audioStartOffsetSeconds": NSNull(),
                 "note": "Recovered at launch: the app quit before writing meta.json, so the audio offset is unknown.",
             ]
-            guard let data = try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys]),
-                  (try? data.write(to: metaURL)) != nil else { continue }
+            guard writeMeta(meta, to: dir) else { continue }
             recovered.append(dir)
         }
         return recovered
@@ -237,7 +255,7 @@ final class SessionRecorder {
 }
 
 /// Writes tap buffers to disk from the audio thread.
-private final class AudioFileWriter: @unchecked Sendable {
+final class AudioFileWriter: @unchecked Sendable {
     struct Info {
         var sampleRate: Double
         var firstHostSeconds: Double?
