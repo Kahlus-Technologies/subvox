@@ -46,6 +46,10 @@ final class AppModel {
     private(set) var evaluation: Evaluation?
     private(set) var isEvaluating = false
     private(set) var lastTemplateID: Template.ID?
+    /// Train's Quick setup walkthrough, while it's on screen. Its takes are added next to existing ones.
+    private(set) var quickSetup: QuickSetup? {
+        didSet { syncCaptureMode() }
+    }
 
     // MARK: Decoding
 
@@ -58,6 +62,7 @@ final class AppModel {
     var minConfidence: Double = 0.05
     private(set) var decoded: [DecodedWord] = []
     private(set) var lastSegment: [MotionSample] = []
+    let mediaKeys = MediaKeyHook()
 
     @ObservationIgnored private var keyMonitor: Any?
     @ObservationIgnored private var started = false
@@ -84,13 +89,15 @@ final class AppModel {
     }
 
     private func syncCaptureMode() {
-        capture.autoEnabled = screen == .decode && decodeMode == .auto
+        capture.autoEnabled = (screen == .decode && decodeMode == .auto)
+            || (screen == .train && quickSetup?.isRunning == true)
     }
 
     private func handleSegment(_ segment: [MotionSample]) {
         lastSegment = segment
         switch screen {
         case .train:
+            if quickSetup != nil { recordQuickSetupTake(segment); return }
             guard let word = selectedWord else { return }
             addTemplate(Template(label: word, samples: segment))
             recorder.logEvent(segment, kind: "train", label: word, confidence: nil)
@@ -100,6 +107,7 @@ final class AppModel {
             decoded.append(DecodedWord(prediction: prediction))
             recorder.logEvent(segment, kind: prediction.accepted ? "decode" : "reject",
                               label: prediction.best?.label ?? "", confidence: prediction.confidence)
+            mediaKeys.handle(prediction)
         case .sensors, .collect:
             recorder.logEvent(segment, kind: "segment", label: recorder.prompt, confidence: nil)
         }
@@ -129,7 +137,7 @@ final class AppModel {
         // Let text fields keep the space bar.
         if NSApp.keyWindow?.firstResponder is NSText { return false }
         switch screen {
-        case .train: return selectedWord != nil
+        case .train: return quickSetup.map(\.isRunning) ?? (selectedWord != nil)
         case .decode: return decodeMode == .hold && classifier != nil
         case .sensors: return recorder.isRecording
         case .collect: return false
@@ -185,6 +193,59 @@ final class AppModel {
         let minCount = candidates.map { drillCounts[$0] ?? 0 }.min() ?? 0
         let pool = candidates.filter { (drillCounts[$0] ?? 0) == minCount }
         selectedWord = (pool.isEmpty ? candidates : pool).randomElement()
+    }
+
+    // MARK: Quick setup: the six command words, five auto-captured takes each
+
+    func startQuickSetup() {
+        let missing = QuickSetup.commands.filter { !dataset.vocabulary.contains($0) }
+        if !missing.isEmpty {
+            dataset.vocabulary.append(contentsOf: missing)
+            persist()
+        }
+        let setup = QuickSetup()
+        quickSetup = setup
+        selectedWord = setup.currentWord
+        capture.calibrate()
+    }
+
+    private func recordQuickSetupTake(_ segment: [MotionSample]) {
+        // Segments that arrive after the run is done or cancelled are dropped, not filed under selectedWord.
+        guard var setup = quickSetup, let word = setup.currentWord else { return }
+        let template = Template(label: word, samples: segment)
+        setup.accept(template.id)
+        dataset.templates.append(template)
+        lastTemplateID = template.id
+        persist()
+        recorder.logEvent(segment, kind: "train", label: word, confidence: nil)
+        quickSetup = setup
+        selectedWord = setup.currentWord ?? word
+    }
+
+    func redoQuickSetupTake() {
+        guard var setup = quickSetup, let id = setup.redo() else { return }
+        quickSetup = setup
+        deleteTemplate(id)
+        selectedWord = setup.currentWord
+    }
+
+    /// Stops the walkthrough and deletes the takes it recorded, so the dataset is as it was before.
+    func cancelQuickSetup() {
+        guard var setup = quickSetup else { return }
+        let recorded = Set(setup.cancel())
+        // Stop auto-capture and end a Space-held capture while the cancelled setup is still set,
+        // so a take cut short here is dropped instead of saved as ordinary training data.
+        quickSetup = setup
+        capture.end()
+        if !recorded.isEmpty {
+            dataset.templates.removeAll { recorded.contains($0.id) }
+            persist()
+        }
+        quickSetup = nil
+    }
+
+    func finishQuickSetup() {
+        quickSetup = nil
     }
 
     func deleteTemplate(_ id: Template.ID) {

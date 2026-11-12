@@ -4,6 +4,8 @@ import SwiftUI
 /// and appended to a running transcript, with the mic transcript alongside for comparison.
 struct DecodeView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage(MediaKeyHook.defaultsKey) private var mediaKeys = false
+    @State private var isTrusted = AccessibilityTrust.isTrusted
 
     var body: some View {
         ScrollView {
@@ -58,8 +60,29 @@ struct DecodeView: View {
                     }
                 }
                 .font(.callout)
+
+                mediaKeyControls
             }
             .padding(6)
+        }
+    }
+
+    private var mediaKeyControls: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle("Media keys: “play” and “stop” press Play/Pause, “next” and “back” skip tracks", isOn: $mediaKeys)
+                .toggleStyle(.switch)
+                .font(.callout)
+                .onChange(of: mediaKeys) { _, on in
+                    if on { isTrusted = AccessibilityTrust.request() }
+                }
+            if mediaKeys && !isTrusted {
+                Text("macOS ignores the keys until Subvox is turned on in System Settings > Privacy & Security > Accessibility.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            isTrusted = AccessibilityTrust.isTrusted
         }
     }
 
