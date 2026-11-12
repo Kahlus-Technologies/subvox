@@ -88,6 +88,20 @@ class BuildDatasetTest(unittest.TestCase):
             self.assertAlmostEqual(float(birch[0, 0]), np.sin(0.8), places=5)
             self.assertEqual(data["offsets"][-1], len(data["motion"]))
 
+    def test_phone_alignment_word_times(self):
+        """words_file="phones.json" cuts on the aligner's word times; sessions not aligned yet are skipped."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            write_session(root, "s1-normal", "Aayu", "The canoe", [{"text": "The", "start": 0.5, "end": 0.7},
+                                                                   {"text": "canoe.", "start": 0.8, "end": 1.4}])
+            (root / "s1-normal" / "phones.json").write_text(json.dumps({
+                "phones": [], "words": [{"text": "the", "start": 0.46, "end": 0.66}, {"text": "canoe", "start": 0.72, "end": 1.3}]}))
+            write_session(root, "s2-normal", "Aayu", "Glue", [{"text": "Glue", "start": 1.0, "end": 1.4}])
+            rows, summary = build_dataset.build([root], "phones.json")
+            self.assertEqual([(r["word"], r["start"]) for r in rows], [("the", 0.46), ("canoe", 0.72)])
+            self.assertEqual(rows[1]["motion"].shape, (30, 9))  # 0.72..1.30 s at 50 Hz
+            self.assertIn("  no phones.json: 1\n", summary)
+
 
 class TransferTest(unittest.TestCase):
     """Silent take = time-warped copy of the spoken take: mapped word boundaries land within 2 samples."""
