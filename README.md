@@ -92,7 +92,7 @@ The training set lives at `~/Library/Application Support/Subvox/dataset.json`.
 |---|---|
 | `Subvox/` | The SwiftUI app (motion, audio, decoding, recording, views). |
 | `SubvoxTests/` | Unit tests. |
-| `analysis/` | Offline scoring scripts (`score.py`, `clean_test.py`, `dist_check.py`, `reseat.py`, `proto_net.py`). They read the app's `dataset.json` (or `--dataset PATH`) and need `numpy` and `numba` (`analysis/requirements.txt`). `proto_net.py` also needs `torch` (`analysis/requirements-ml.txt`). `open_vocab.py` reads session folders instead and runs the open-vocabulary baselines (#11); its CTC model needs `torch` too. `sh analysis/smoke_test.sh` runs them on small synthetic datasets. Results and commands are in `analysis/RESULTS.md`. |
+| `analysis/` | Offline scoring scripts (`score.py`, `clean_test.py`, `dist_check.py`, `reseat.py`, `proto_net.py`, `ssl_probe.py`). They read the app's `dataset.json` (or `--dataset PATH`) and need `numpy` and `numba` (`analysis/requirements.txt`). `proto_net.py` and `ssl_probe.py` also need `torch` (`analysis/requirements-ml.txt`), and `ssl_probe.py` downloads a pretrained encoder through torch.hub the first time. `open_vocab.py` reads session folders instead and runs the open-vocabulary baselines (#11); its CTC model needs `torch` too. `sh analysis/smoke_test.sh` runs them on small synthetic datasets. Results and commands are in `analysis/RESULTS.md`. |
 | `tools/` | Session labeling with Phonon-2 and the DMG builder. |
 | `dmg/` | DMG window background and `dmgbuild` settings. |
 | `docs/` | README banner. |

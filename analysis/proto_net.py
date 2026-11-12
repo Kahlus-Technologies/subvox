@@ -138,14 +138,15 @@ def pct(hits):
     return f"{hits.mean():.0%} ({hits.sum()}/{len(hits)})" if len(hits) else "-"
 
 def row(split, method, fr, y, margin, shuffles):
-    """One table row from [(held-out name, test idx, rule)]. Chance: the same label shuffles for every method."""
+    """One table row from [(held-out name, test idx, rule)]. Chance: the same label shuffles for every method.
+    A rule with a .many(S) method predicts for every row of shuffled labels S at once (ssl_probe.py's refits)."""
     hit, keep, byf = [], [], []
     for name, q, rule in fr:
         pred, m = rule(y); h = pred == y[q]; hit.append(h); keep.append(m >= margin); byf.append(f"{name} {h.sum()}/{len(h)}")
     hit, keep = np.concatenate(hit), np.concatenate(keep)
-    rng = np.random.default_rng(0); null = np.zeros(shuffles)
-    for k in range(shuffles):
-        s = rng.permutation(y); null[k] = np.mean(np.concatenate([rule(s)[0] == s[q] for _, q, rule in fr]))
+    rng = np.random.default_rng(0); S = np.array([rng.permutation(y) for _ in range(shuffles)])
+    many = lambda rule: rule.many(S) if hasattr(rule, "many") else np.array([rule(s)[0] for s in S])
+    null = np.concatenate([many(rule) == S[:, q] for _, q, rule in fr], 1).mean(1)
     p = (np.sum(null >= hit.mean()) + 1) / (shuffles + 1)
     return (f"| {split} | {method} | {pct(hit)} | {', '.join(byf)} | {1 - keep.mean():.0%} | {pct(hit[keep])} "
             f"| {null.mean():.0%} | {p:.3f} |")
