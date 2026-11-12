@@ -1,4 +1,4 @@
-"""Shared helpers for the analysis scripts: dataset path and --since args, trimming, smoothing, DTW, scoring.
+"""Shared helpers for the analysis scripts: dataset path and --since args, trimming, smoothing, DTW, scoring, rotations.
 Needs numpy and numba: pip install -r analysis/requirements.txt
 """
 import argparse, json, pathlib
@@ -9,12 +9,14 @@ DEFAULT_DATASET = pathlib.Path.home() / "Library/Application Support/Subvox/data
 DRILL_SINCE = pathlib.Path(__file__).resolve().parent.parent / ".drill_since"
 ROT = ["rx", "ry", "rz"]; ACC = ["ax", "ay", "az"]
 
-def parse_args(description, drill_since_file=False):
+def parse_args(description, drill_since_file=False, extra=None):
     """--dataset PATH (default: the app's dataset.json) and --since CREATED_AT (where drill takes start).
-    With drill_since_file, a missing --since is read from .drill_since at the repo root if it exists."""
+    With drill_since_file, a missing --since is read from .drill_since at the repo root if it exists.
+    extra(parser) can add a script's own options."""
     p = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dataset", type=pathlib.Path, default=DEFAULT_DATASET, help="Subvox dataset.json (default: %(default)s)")
     p.add_argument("--since", type=float, help="createdAt of the first drill take (seconds since 2001, as in dataset.json)")
+    if extra: extra(p)
     args = p.parse_args()
     if args.since is None and drill_since_file and DRILL_SINCE.exists():
         args.since = float(DRILL_SINCE.read_text())
@@ -22,7 +24,7 @@ def parse_args(description, drill_since_file=False):
 
 def load_takes(path):
     """Every take sorted by createdAt, and the sorted word list."""
-    takes = sorted(json.load(open(path))["templates"], key=lambda t: t["createdAt"])
+    takes = sorted(json.loads(pathlib.Path(path).read_text())["templates"], key=lambda t: t["createdAt"])
     return takes, sorted({t["label"] for t in takes})
 
 def raw(t, keys):
@@ -61,6 +63,18 @@ def make(T, keys, frac=0.15, pad=2, sm=1, resample=None, znorm=False):
         out.append(x)
     sd = np.concatenate(out).std(0) + 1e-9
     return [x / sd for x in out]
+
+def rotvec(v):
+    """3x3 rotation matrix for rotation vector v (axis times angle in radians), by Rodrigues' formula."""
+    th = np.linalg.norm(v)
+    if th < 1e-12: return np.eye(3)
+    k = v / th; K = np.array([[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]])
+    return np.eye(3) + np.sin(th) * K + (1 - np.cos(th)) * K @ K
+
+def turn(x, R):
+    """Rotate the accel (columns 0-2) and rotation-rate (3-5) vectors of a take by R; other columns stay."""
+    x = x.copy(); x[:, 0:3] = x[:, 0:3] @ R.T; x[:, 3:6] = x[:, 3:6] @ R.T
+    return x
 
 @njit(cache=True)
 def dtw(a, b, band):

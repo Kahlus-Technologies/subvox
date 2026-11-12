@@ -1,4 +1,5 @@
-"""Real-data check of plan step 3: train on wear 0, test on wear 1 (AirPods re-seated). DTW-1NN like the app."""
+"""Real-data check of plan step 3: train on wear 0, test on wear 1 (AirPods re-seated). DTW-1NN like the app.
+reseat.py runs leave-one-wear-out over any number of wears."""
 import json, sys, pathlib, numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from clean_test_lib import dtw, trim_idx, smooth, energy, raw, parse_args
