@@ -52,7 +52,7 @@ struct CollectView: View {
                                 Button(take.next == nil ? "Next sentence  →" : "Now mouth it  →") { next() }
                                     .buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: [])
                                 Button("Redo") { redo() }
-                                Button("Pause") { recorder.stop() }
+                                Button("Pause") { recorder.stop(discard: take.discardedOnPause) }
                             } else {
                                 Button("Start") { begin() }
                                     .buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: [])

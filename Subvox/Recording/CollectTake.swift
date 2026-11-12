@@ -12,6 +12,10 @@ struct CollectTake: Equatable {
         CollectTake(condition: .normal, pairId: paired ? id : nil)
     }
 
+    /// Pausing mid-take keeps a spoken take (its own audio labels it) but drops a silent one: it is likely
+    /// cut short, and build_dataset.py would stretch the whole spoken sentence over it. Start then begins a new pair.
+    var discardedOnPause: Bool { condition == .silent }
+
     /// The take after this one, or nil when the sentence is done.
     var next: CollectTake? {
         guard let pairId, condition == .normal else { return nil }

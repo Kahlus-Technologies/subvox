@@ -22,6 +22,13 @@ final class CollectPairingTests: XCTestCase {
         XCTAssertNil(silent.next, "the silent take ends the sentence")
     }
 
+    func testPauseDropsOnlyTheSilentTake() throws {
+        let spoken = CollectTake.first(paired: true)
+        XCTAssertFalse(spoken.discardedOnPause, "a paused spoken take is still labelled by its own audio")
+        XCTAssertTrue(try XCTUnwrap(spoken.next).discardedOnPause, "a paused silent take is likely cut short")
+        XCTAssertFalse(CollectTake.first(paired: false).discardedOnPause)
+    }
+
     func testEachSentenceGetsANewPairId() throws {
         let a = try XCTUnwrap(CollectTake.first(paired: true).pairId)
         let b = try XCTUnwrap(CollectTake.first(paired: true).pairId)
