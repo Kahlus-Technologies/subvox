@@ -56,9 +56,7 @@ struct TemplateClassifier: Sendable {
         for (entry, d) in zip(entries, distances) {
             best[entry.label] = min(best[entry.label] ?? .infinity, d)
         }
-        // Equal distances, such as all-infinite ones for an empty segment, sort by label, not hash order.
-        return best.map { RankedLabel(label: $0.key, distance: $0.value) }
-            .sorted { ($0.distance, $0.label) < ($1.distance, $1.label) }
+        return best.map { RankedLabel(label: $0.key, distance: $0.value) }.sorted { $0.distance < $1.distance }
     }
 
     func predict(_ samples: [MotionSample], maxDistance: Double, minConfidence: Double) -> Prediction {

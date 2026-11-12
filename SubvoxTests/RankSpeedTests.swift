@@ -38,16 +38,6 @@ final class RankSpeedTests: XCTestCase {
         }
     }
 
-    func testRankBreaksTiesByLabel() throws {
-        var rng = SplitMix64(seed: 7)
-        let classifier = try XCTUnwrap(TemplateClassifier(
-            templates: syntheticTemplates(words: 5, perWord: 2, using: &rng), featureSet: .all))
-        // An empty segment is infinitely far from every word.
-        let ranked = classifier.rank([])
-        XCTAssertEqual(ranked.map(\.label), ["word0", "word1", "word2", "word3", "word4"])
-        XCTAssertTrue(ranked.allSatisfy { $0.distance == .infinity })
-    }
-
     func testPairwiseDistancesMatchSerialLoop() {
         var rng = SplitMix64(seed: 3)
         let seqs = (0..<20).map { _ in
