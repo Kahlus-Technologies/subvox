@@ -10,6 +10,6 @@ PY=${PYTHON:-python3}
 $PY score.py --dataset "$F"
 $PY clean_test.py --dataset "$F" --since 800000000
 $PY dist_check.py --dataset "$F"
-$PY reseat.py --dataset fixtures/dataset_reseat.json
+$PY reseat.py --dataset fixtures/dataset_reseat.json --augment
 $PY -m unittest discover -s . -p 'test_*.py'
 echo "analysis smoke test passed"
