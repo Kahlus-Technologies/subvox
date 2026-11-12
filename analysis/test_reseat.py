@@ -24,8 +24,8 @@ class GravityFrameTest(unittest.TestCase):
     def test_gravity_frame_undoes_a_tilt_per_wear(self):
         """The fixture tilts wears 1 and 2 by +-25 degrees: templates stop transferring until the frame fixes it."""
         T, words = load_takes(FIXTURE)
-        wear = reseat.wears(T); y = np.array([words.index(t["label"]) for t in T]); other = wear[:, None] != wear[None, :]
-        acc = lambda gravity: np.mean(y[reseat.nearest(reseat.distances(T, wear, False, gravity), other)] == y)
+        wear = reseat.wears(T); y = np.array([words.index(t["label"]) for t in T])
+        acc = lambda gravity: np.mean(y[reseat.lowo_nn(*reseat.features(T, wear, False, gravity), wear)] == y)
         self.assertLess(acc(False), 0.7)
         self.assertEqual(acc(True), 1.0)
 
