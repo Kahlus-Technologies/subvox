@@ -1,0 +1,70 @@
+name: Release
+
+# A v* tag builds dist/Subvox.dmg and attaches it to that tag's GitHub Release. A pull request that
+# touches the release files builds the same DMG and uploads it as a workflow artifact instead.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - tools/make_dmg.sh
+      - dmg/**
+      - Subvox/Subvox.entitlements
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install XcodeGen and uv
+        run: brew install xcodegen uv
+      # Notarized only if the owner has added the signing secrets (see README). Otherwise ad-hoc.
+      - name: Set up Developer ID signing
+        env:
+          P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          APP_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then echo "No DEVELOPER_ID_P12 secret: building an ad-hoc DMG."; exit 0; fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(uuidgen)
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security default-keychain -s "$keychain"
+          security list-keychains -d user -s "$keychain"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application/ { print $2; exit }')
+          [ -n "$identity" ] || { echo "::error::DEVELOPER_ID_P12 has no Developer ID Application identity"; exit 1; }
+          xcrun notarytool store-credentials subvox-notary \
+            --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD"
+          echo "DEVELOPER_ID=$identity" >> "$GITHUB_ENV"
+          echo "NOTARY_PROFILE=subvox-notary" >> "$GITHUB_ENV"
+      - name: Build DMG
+        run: tools/make_dmg.sh
+      - name: Upload DMG artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Subvox-dmg
+          path: dist/Subvox.dmg
+      - name: Attach DMG to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" dist/Subvox.dmg --clobber

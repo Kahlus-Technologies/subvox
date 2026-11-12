@@ -13,9 +13,25 @@ It doesn't use a language model. It's a small-vocabulary template recognizer plu
 
 ## Install
 
-Grab `Subvox.dmg` from [Releases](../../releases), drag Subvox into Applications, then right-click it and choose **Open** the first time. The app is ad-hoc signed, not notarized.
+Grab `Subvox.dmg` from [Releases](../../releases) and drag Subvox into Applications. If macOS refuses to open it, that release is ad-hoc signed rather than notarized. Right-click Subvox and choose **Open** the first time.
 
 To build the DMG yourself: `tools/make_dmg.sh` (needs `uv`, which fetches `dmgbuild`), output in `dist/Subvox.dmg`.
+
+## Release
+
+Bump `MARKETING_VERSION` in `project.yml`, then push a matching tag, for example `git tag v0.2.0 && git push origin v0.2.0`. The Release workflow runs `tools/make_dmg.sh` and attaches `dist/Subvox.dmg` to the GitHub Release for that tag. Pull requests that change the DMG files build it too and upload it as a workflow artifact.
+
+Without the secrets below the DMG is ad-hoc signed. To notarize it, add these repository secrets (Settings > Secrets and variables > Actions):
+
+| Secret | Value |
+|---|---|
+| `DEVELOPER_ID_P12` | The Developer ID Application certificate with its private key, exported from Keychain Access as a .p12, then base64-encoded (`base64 -i cert.p12 -o cert.txt`). |
+| `DEVELOPER_ID_P12_PASSWORD` | The password chosen when exporting the .p12. |
+| `NOTARY_APPLE_ID` | The Apple ID email of the developer account. |
+| `NOTARY_TEAM_ID` | The 10-character Team ID. |
+| `NOTARY_PASSWORD` | An app-specific password for that Apple ID, made at account.apple.com. |
+
+To notarize on your own Mac, save the notary credentials once with `xcrun notarytool store-credentials subvox-notary --apple-id ... --team-id ... --password ...`, then run `DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=subvox-notary tools/make_dmg.sh`. The script then signs the app with the hardened runtime and `Subvox/Subvox.entitlements` (microphone access), and notarizes and staples the DMG.
 
 ## Build & run
 
