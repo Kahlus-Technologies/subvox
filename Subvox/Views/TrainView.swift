@@ -10,7 +10,11 @@ struct TrainView: View {
                 .frame(minWidth: 200, idealWidth: 220, maxWidth: 280)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    capturePanel
+                    if let setup = model.quickSetup {
+                        QuickSetupPanel(setup: setup)
+                    } else {
+                        capturePanel
+                    }
                     takes
                     EvaluationPanel()
                 }
@@ -56,6 +60,13 @@ struct TrainView: View {
         @Bindable var model = model
         let word = model.selectedWord ?? "—"
         return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("New user? Record the six command words, 5 takes each, in about 2 minutes.")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Quick setup", systemImage: "wand.and.stars", action: model.startQuickSetup)
+                    .disabled(model.motion.status != .streaming)
+            }
             Toggle("Drill: shuffle words after every take (recommended, gives honest accuracy)", isOn: $model.drill)
                 .toggleStyle(.switch)
             if model.drill {
@@ -106,6 +117,83 @@ struct TrainView: View {
     private func addWord() {
         model.addWord(newWord)
         newWord = ""
+    }
+}
+
+/// Train's Quick setup: prompts each command word in turn and records takes by auto-detect.
+private struct QuickSetupPanel: View {
+    @Environment(AppModel.self) private var model
+    var setup: QuickSetup
+
+    var body: some View {
+        let capture = model.capture
+        GroupBox("Quick setup: \(QuickSetup.commands.joined(separator: ", "))") {
+            VStack(alignment: .leading, spacing: 10) {
+                switch setup.step {
+                case let .take(word, number):
+                    Text(word)
+                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 6)
+                    Text("Take \(number) of \(setup.takesPerWord)")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    if capture.isCalibrating {
+                        Text("Keep still for 2 seconds while Subvox measures your resting motion…")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Silently mouth “\(word)”, then hold still. Each take records on its own. Holding Space also works.")
+                            .foregroundStyle(.secondary)
+                    }
+                    let scaleMax = max((capture.threshold ?? 0.05) * 2, 0.02)
+                    HStack {
+                        Circle()
+                            .fill(capture.isCapturing ? Color.red : Color.secondary.opacity(0.3))
+                            .frame(width: 10, height: 10)
+                        Text(capture.isCalibrating ? "Calibrating" : capture.isCapturing ? "Capturing" : "Listening")
+                            .font(.caption)
+                            .frame(width: 70, alignment: .leading)
+                        LevelMeter(value: capture.energy / scaleMax,
+                                   marker: capture.threshold.map { $0 / scaleMax },
+                                   tint: capture.isCapturing ? .red : .blue)
+                    }
+                case .done:
+                    Label("All \(setup.totalTakes) takes recorded. Try them in Decode.", systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.green)
+                case .cancelled:
+                    EmptyView()
+                }
+
+                ProgressView(value: setup.progress) {
+                    Text("\(setup.takes.count) of \(setup.totalTakes) takes")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Button("Redo last take", systemImage: "arrow.uturn.backward", action: model.redoQuickSetupTake)
+                        .disabled(setup.takes.isEmpty)
+                    Spacer()
+                    if setup.step == .done {
+                        Button("Done", action: model.finishQuickSetup)
+                            .buttonStyle(.borderedProminent)
+                            .keyboardShortcut(.return, modifiers: [])
+                    } else {
+                        Button("Cancel", role: .cancel, action: model.cancelQuickSetup)
+                            .help("Stop and delete the takes recorded in this setup")
+                    }
+                }
+
+                if model.motion.status != .streaming {
+                    Label(model.motion.status.label, systemImage: "airpodspro")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(6)
+        }
     }
 }
 
