@@ -109,9 +109,10 @@ def transfer(spans, t_spoken, x_spoken, t_silent, x_silent):
     return out
 
 
-def load_session(d, spoken=None):
+def load_session(d, spoken=None, words_file="words.json"):
     """(rows, minutes, dropped words) for one session folder, or raise ValueError saying why it's skipped.
-    spoken maps a pairId to its spoken take's folder, where a silent take gets its words."""
+    spoken maps a pairId to its spoken take's folder, where a silent take gets its words.
+    words_file="phones.json" slices on the phone alignment's word times instead of the ASR's."""
     if not (d / "motion.csv").exists():
         raise ValueError("no motion.csv")
     meta = read_meta(d)
@@ -120,11 +121,11 @@ def load_session(d, spoken=None):
         source = (spoken or {}).get(meta.get("pairId"))
         if source is None:
             raise ValueError("silent take with no paired spoken take")
-    if not (source / "words.json").exists():
-        raise ValueError("no words.json" if source == d else "paired spoken take has no words.json")
-    words = json.loads((source / "words.json").read_text()).get("words") or []
+    if not (source / words_file).exists():
+        raise ValueError(f"no {words_file}" if source == d else f"paired spoken take has no {words_file}")
+    words = json.loads((source / words_file).read_text()).get("words") or []
     if not words:
-        raise ValueError("words.json has no words")
+        raise ValueError(f"{words_file} has no words")
     t, motion = read_motion(d)
     spans = [(w["start"], w["end"]) for w in words]
     if source != d:
@@ -142,7 +143,7 @@ def load_session(d, spoken=None):
     return rows, (t[-1] - t[0]) / 60, dropped
 
 
-def build(roots):
+def build(roots, words_file="words.json"):
     """All rows plus the summary.txt text."""
     folders = [d for root in roots for d in sorted(p for p in pathlib.Path(root).expanduser().iterdir() if p.is_dir())]
     spoken = {}
@@ -156,7 +157,7 @@ def build(roots):
     rows, used, skipped, minutes, dropped = [], [], Counter(), 0.0, 0
     for d in folders:
         try:
-            session_rows, session_minutes, session_dropped = load_session(d, spoken)
+            session_rows, session_minutes, session_dropped = load_session(d, spoken, words_file)
         except (ValueError, OSError, KeyError) as e:
             skipped[str(e)] += 1
             continue

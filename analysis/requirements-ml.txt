@@ -1,4 +1,4 @@
-# For proto_net.py (#18). CPU is enough: pip install -r analysis/requirements-ml.txt
+# For proto_net.py (#18) and the CTC baseline in open_vocab.py (#11). CPU is enough: pip install -r analysis/requirements-ml.txt
 # The other scripts and smoke_test.sh only need requirements.txt; torch tests skip without torch.
 -r requirements.txt
 torch>=2.0
