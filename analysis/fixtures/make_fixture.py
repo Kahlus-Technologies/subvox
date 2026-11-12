@@ -7,6 +7,7 @@ dataset_reseat.json (for reseat.py): 3 wears x 3 words x 4 takes, 10 minutes apa
 in the direction of the motion, and each wear tilts the AirPods by a fixed rotation (accel, rotation rate and
 gravity together), like re-seating them. A tilt confuses these words by construction: this checks the
 scripts, it does not say how much real re-seats hurt.
+dataset_person_b.json, dataset_person_c.json (for proto_net.py): two more people, described at the end of this file.
 """
 import json, pathlib, uuid
 import numpy as np
@@ -81,3 +82,43 @@ for deg, axis in TILTS:
             created += 20
     created += 600
 write("dataset_reseat.json", [w for w, _, _ in SEATED], templates)
+
+# dataset_person_b.json and dataset_person_c.json (for proto_net.py, issue #18): two more people for
+# leave-one-person-out, with dataset_reseat.json as person A. Same words and layout (3 wears x 3 words x 4 takes,
+# 10 minutes apart). Each person turns every word's axis by a few degrees, mouths faster or slower and bigger or
+# smaller, and each of their seats adds a turn about the gravity axis to the tilt, which the gravity frame cannot
+# undo. Like the tilt, these differences are chosen, not measured.
+PEOPLE = [  # name, turn of each word's axis (degrees), tempo, size, samples per take, seats (tilt, its axis, yaw)
+    ("b", [6, -5, 4], 1.1, 0.8, 26, [(0, 1, 0), (15, 0, 20), (-20, 1, -15)]),
+    ("c", [-5, 6, -6], 0.9, 1.25, 36, [(10, 1, -10), (-15, 0, 25), (20, 1, 10)])]
+rng3 = np.random.default_rng(2)
+
+def yaw(deg):
+    c, s = np.cos(np.radians(deg)), np.sin(np.radians(deg))
+    return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1.0]])
+
+def person_take(angle, cycles, size, n0, R, t0):
+    """seated_take with the person's size and length; R turns the head frame into this seat's AirPods frame."""
+    n = int(n0 + rng3.integers(-4, 5))
+    i = np.arange(n)
+    wave = size * rng3.uniform(0.8, 1.2) * np.sin(np.pi * i / (n - 1)) * np.sin(2 * np.pi * cycles * i / n)
+    a = np.radians(angle + rng3.normal(0, 4))
+    d = np.array([np.cos(a), 0, np.sin(a)]); up = np.array([-np.sin(a), 0, np.cos(a)])
+    rot = rng3.normal(0, 0.01, (n, 3)) + 0.3 * np.outer(wave, d)
+    acc = rng3.normal(0, 0.002, (n, 3)) + 0.02 * np.outer(wave, up)
+    grav = R @ [0, 0, -1.0] + rng3.normal(0, 0.005, (n, 3))
+    return samples(acc @ R.T, rot @ R.T, grav, t0)
+
+for k, (name, turns, tempo, size, n0, seats) in enumerate(PEOPLE):
+    templates = []
+    created = 820000000.0 + 10000000 * k
+    for deg, axis, turn in seats:
+        R = tilt(deg, axis) @ yaw(turn)  # yaw first: it leaves gravity where it was
+        for (label, angle, cycles), dt in zip(SEATED, turns):
+            for _ in range(4):
+                templates.append({"id": str(uuid.UUID(int=len(templates) + 1)).upper(), "label": label,
+                                  "samples": person_take(angle + dt, cycles * tempo, size, n0, R, 3000.0 + 5 * len(templates)),
+                                  "createdAt": created})
+                created += 20
+        created += 600
+    write(f"dataset_person_{name}.json", [w for w, _, _ in SEATED], templates)
