@@ -62,6 +62,7 @@ final class AppModel {
     var minConfidence: Double = 0.05
     private(set) var decoded: [DecodedWord] = []
     private(set) var lastSegment: [MotionSample] = []
+    let mediaKeys = MediaKeyHook()
 
     @ObservationIgnored private var keyMonitor: Any?
     @ObservationIgnored private var started = false
@@ -106,6 +107,7 @@ final class AppModel {
             decoded.append(DecodedWord(prediction: prediction))
             recorder.logEvent(segment, kind: prediction.accepted ? "decode" : "reject",
                               label: prediction.best?.label ?? "", confidence: prediction.confidence)
+            mediaKeys.handle(prediction)
         case .sensors, .collect:
             recorder.logEvent(segment, kind: "segment", label: recorder.prompt, confidence: nil)
         }
