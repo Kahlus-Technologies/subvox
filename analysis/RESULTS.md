@@ -30,6 +30,55 @@ The owner's augmentation in `reseat_test.py` is not the one in `augment.py`: 2 c
 
 Caveats from the owner: n=29 and a single re-seat. Each fix moves the score by one take, which is noise at this size, and the CI on the re-seat drop (-28 to +21 points) cannot rule out a large drop. With a 120 s gap threshold, wear 0 splits 147/54, so it may not be one seating. Answering the question needs 3-4 deliberate re-seats of about 25 takes each (#16).
 
+## Open vocabulary (#11)
+
+Can a model spell words from AirPods head motion when it never trained on those words, or can it only match words it has seen? `analysis/open_vocab.py` answers that on talk-mode sessions.
+
+**No real-data result yet.** The plan is to run this after 5+ people x 10+ min of talk-mode data (docs/research/prior-work-and-training-plan.md, step 7), and the research notes expect over 60% CER even then. The only numbers below come from synthetic sessions. They show that the pipeline runs and finds a signal that was planted on purpose. They say nothing about AirPods.
+
+Two baselines, and every word is scored by a model that never saw its session (or its speaker):
+
+- DTW-1NN gives a test word the word of its nearest training word. It can only name words that occur in training.
+- CTC is a small 1D-CNN + GRU (about 80k parameters) that spells a word's ARPAbet phonemes from its motion, so it can spell words it never trained on. For word accuracy, its spelling is snapped to the closest pronunciation in the dataset's word list.
+
+Chance is the same predictions scored against the test targets shuffled within each fold, 200 times, as in `score.py`. CER counts phoneme edits per target phoneme, so it can pass 100% when guesses are longer than the targets. "Unseen words" are test words that never occur in training, and their columns are the open-vocabulary question itself. "Held-out sessions" cuts each speaker's sessions into 5 blocks in time order. Collect starts every new speaker at the same first sentence and goes through the list in order, so a block's sentences are missing from training for everyone, and that is where unseen words come from. For the same reason, held-out speakers mostly tests words that other speakers said.
+
+### Run it on real exports
+
+    pip install -r analysis/requirements.txt -r analysis/requirements-ml.txt
+    python3 tools/align_phones.py   # phones.json for ~/Documents/Subvox/Sessions; MFA setup is in the file
+    SUBVOX_SESSIONS=path/to/unzipped/export/Sessions python3 tools/align_phones.py
+    python3 analysis/open_vocab.py --sessions ~/Documents/Subvox/Sessions path/to/unzipped/export/Sessions \
+        --results analysis/RESULTS.md
+
+Sessions without `phones.json` need `--lexicon FILE`, a CMUdict-format pronunciation file you supply (nothing is downloaded or bundled). A `words.npz` from `tools/build_dataset.py` works too (`--npz subvox-dataset/words.npz --lexicon FILE`), but then phonemes come only from the lexicon and word times from `words.json`. A real-data run writes its table under "Real data" below.
+
+### Real data
+
+<!-- open_vocab.py real -->
+Pending: no real talk-mode exports have been run yet.
+<!-- /open_vocab.py real -->
+
+### Synthetic fixture (pipeline check only)
+
+`analysis/fixtures/make_sessions.py` writes 3 speakers x 30 one-sentence sessions in the app's file formats, drawing words from an 86-word lexicon (70 of them come up with the default seed). Each phoneme is a fixed motion pattern (look-alike phonemes such as P/B/M share most of it), smoothed into its neighbours, mixed per speaker and per session, plus noise and head drift. Both models should beat chance here; if they didn't, the pipeline would be broken. Regenerate with:
+
+    python3 analysis/fixtures/make_sessions.py /tmp/subvox-synth   # needs a new or empty folder
+    python3 analysis/open_vocab.py --sessions /tmp/subvox-synth --results analysis/RESULTS.md
+
+<!-- open_vocab.py synthetic -->
+**Synthetic fixture, not recordings.** Run 2026-11-11: 3 speakers, 90 sessions, 579 words (70 unique); phonemes from phones.json for 579 words, from the lexicon for 0. Took 40 s.
+
+    python3 analysis/open_vocab.py --sessions /tmp/subvox-synth --results analysis/RESULTS.md
+
+| split | model | words | seen in training | word accuracy (chance) p | phoneme CER (chance) p | unseen words: accuracy | unseen words: CER |
+|---|---|---|---|---|---|---|---|
+| held-out sessions (5 time blocks per speaker) | DTW-1NN | 579 | 78% | 63% (5%) p=0.005 | 35% (105%) p=0.005 | 0% (0%) p=1.000 | 90% (105%) p=0.005 |
+| held-out sessions (5 time blocks per speaker) | CTC | 579 | 78% | 53% (5%) p=0.005 | 39% (98%) p=0.005 | 5% (1%) p=0.010 | 71% (94%) p=0.005 |
+| held-out speakers | DTW-1NN | 579 | 100% | 54% (3%) p=0.005 | 47% (107%) p=0.005 | - | - |
+| held-out speakers | CTC | 579 | 100% | 34% (4%) p=0.005 | 58% (98%) p=0.005 | - | - |
+<!-- /open_vocab.py synthetic -->
+
 ## Appended runs
 
 `reseat.py` and `proto_net.py` append their output below when given `--results analysis/RESULTS.md`. Each heading is the exact command. A command with `--dataset analysis/fixtures/...` ran on synthetic data. A command without `--dataset` ran on the app's real dataset.
