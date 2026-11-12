@@ -233,8 +233,10 @@ final class AppModel {
     func cancelQuickSetup() {
         guard var setup = quickSetup else { return }
         let recorded = Set(setup.cancel())
-        // Stop auto-capture while quickSetup is still set, so a take cut short here is dropped.
+        // Stop auto-capture and end a Space-held capture while the cancelled setup is still set,
+        // so a take cut short here is dropped instead of saved as ordinary training data.
         quickSetup = setup
+        capture.end()
         if !recorded.isEmpty {
             dataset.templates.removeAll { recorded.contains($0.id) }
             persist()

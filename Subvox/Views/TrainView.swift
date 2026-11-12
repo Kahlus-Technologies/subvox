@@ -106,6 +106,8 @@ struct TrainView: View {
                             TakeTile(template: take, isNew: take.id == model.lastTemplateID) {
                                 model.deleteTemplate(take.id)
                             }
+                            // Quick setup counts its takes; deleting one would leave the count wrong. Redo replaces the last.
+                            .disabled(model.quickSetup?.isRunning == true)
                         }
                     }
                     .padding(6)
