@@ -5,14 +5,20 @@ label shuffle. Each with two cheap fixes on and off: per-wear z-score of each ch
 frame (rotate accel and rotation rate so every wear's mean gx,gy,gz points the same way). Both use the held-out
 wear's own takes but never its labels; global z is fit on each fold's training wears only, like the app's
 templates. Features are accel + rotation rate, the vectors a re-seat rotates.
-Usage: python3 analysis/reseat.py [--dataset PATH] [--since CREATED_AT] [--gap SECONDS] [--results analysis/RESULTS.md]
+--augment adds a leave-one-wear-out table with augmented copies of the training takes (augment.py, issue #17).
+Usage: python3 analysis/reseat.py [--dataset PATH] [--since CREATED_AT] [--gap SECONDS] [--augment]
+                                  [--results analysis/RESULTS.md]
 """
 import pathlib, sys
 import numpy as np
 from clean_test_lib import parse_args, load_takes, raw, energy, smooth, trim_idx, dtw, dmat, rotvec, turn, ACC, ROT
+from augment import augment, STEPS
 
 CONFIGS = [("none (global z, like the app)", False, False), ("per-wear z", True, False),
            ("gravity frame", False, True), ("per-wear z + gravity frame", True, True)]
+AUGS = [("none", ()), ("rotation ±10°", ("rotation",)), ("time warp ±15%", ("time warp",)),
+        ("magnitude 0.8-1.2", ("magnitude",)), ("slow drift", ("drift",)), ("all four", tuple(STEPS))]
+COPIES = 4
 
 def wears(T, gap=180.0):
     """Wear number per take (T sorted by createdAt): a new wear after a gap over `gap` s, unless the take has "wear"."""
@@ -56,20 +62,29 @@ def fold_sd(X, sd, train):
     if sd is not None: return sd
     return np.tile(np.concatenate([X[i] for i in train]).std(0) + 1e-9, (len(X), 1))
 
-def lowo_nn(X, sd, wear):
+def lowo_nn(X, sd, wear, steps=(), seed=0):
     """Leave-one-wear-out: index of each take's nearest neighbour among the other wears' takes, with global z
-    fit on those training wears only."""
+    fit on those training wears only. With augment.py `steps`, every training take also gets COPIES augmented
+    copies, made in sensor units (before scaling) and divided by their source take's std; a copy that wins
+    counts as its source take."""
+    rng = np.random.default_rng(seed); k = COPIES if steps else 0
     nn = np.zeros(len(X), int)
     for w in sorted(set(wear)):
-        tr = np.where(wear != w)[0]; s = fold_sd(X, sd, tr); A = [X[i] / s[i] for i in tr]
+        tr = np.where(wear != w)[0]; s = fold_sd(X, sd, tr)
+        A = [X[i] / s[i] for i in tr] + [augment(X[i], rng, steps) / s[i] for i in tr for _ in range(k)]
+        src = np.concatenate([tr, np.repeat(tr, k)])
         for j in np.where(wear == w)[0]:
-            nn[j] = tr[np.argmin([dtw(X[j] / s[j], a, 10) for a in A])]
+            nn[j] = src[np.argmin([dtw(X[j] / s[j], a, 10) for a in A])]
     return nn
 
 def nearest(M, allowed):
     """Index of each take's nearest neighbour among the takes allowed for it (never itself)."""
     D = np.where(allowed, M, np.inf); np.fill_diagonal(D, np.inf)
     return D.argmin(1)
+
+def lowo(X, sd, y, wear, steps=(), seed=0):
+    """Leave-one-wear-out hits (see lowo_nn)."""
+    return y[lowo_nn(X, sd, wear, steps, seed)] == y
 
 def pct(hits):
     return f"{hits.mean():.0%} ({hits.sum()}/{len(hits)})"
@@ -90,9 +105,17 @@ def table(T, y, wear, shuffles=1000):
         rows.append(f"| {name} | {pct(hit)} | {byw} | {pct(within)} | {null.mean():.0%} | {p:.3f} |")
     return "\n".join(rows)
 
+def aug_table(T, y, wear):
+    F = [features(T, wear, perwear, gravity) for _, perwear, gravity in CONFIGS]
+    rows = ["| augmentation | " + " | ".join(name for name, _, _ in CONFIGS) + " |", "|---" * (len(CONFIGS) + 1) + "|"]
+    for name, steps in AUGS:
+        rows.append(f"| {name} | " + " | ".join(pct(lowo(X, sd, y, wear, steps)) for X, sd in F) + " |")
+    return "\n".join(rows)
+
 if __name__ == "__main__":
     def options(p):
         p.add_argument("--gap", type=float, default=180.0, help="seconds between takes that start a new wear (default: %(default)s)")
+        p.add_argument("--augment", action="store_true", help="also score leave-one-wear-out with augmented training takes")
         p.add_argument("--results", type=pathlib.Path, help="also append the output to this markdown file, e.g. analysis/RESULTS.md")
     args = parse_args(__doc__, extra=options)
     ALL, _ = load_takes(args.dataset)
@@ -102,6 +125,9 @@ if __name__ == "__main__":
     head = (f"{len(T)} takes, words {words}, {len(set(wear))} wears of {np.bincount(wear).tolist()} takes "
             f"(gap > {args.gap:g} s or wear field). DTW-1NN on accel + rotation rate.")
     out = f"{head}\n\n{table(T, y, wear)}"
+    if args.augment:
+        out += (f"\n\nLeave-one-wear-out with {COPIES} augmented copies of each training take (augment.py, seed 0). "
+                f"Columns are the fixes above.\n\n{aug_table(T, y, wear)}")
     print(out)
     if args.results:
         with open(args.results, "a") as f: f.write(f"\n### `python3 {' '.join(sys.argv)}`\n\n{out}\n")
