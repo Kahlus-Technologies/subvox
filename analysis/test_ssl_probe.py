@@ -19,8 +19,7 @@ class ProbeTest(unittest.TestCase):
     def test_accel_is_resampled_to_30_hz_with_gravity_and_centred_in_a_still_window(self):
         t = np.arange(50) / 50.0
         x = np.zeros((50, 9)); x[:, 0] = np.sin(2 * np.pi * t)
-        T = [{"samples": [{"gx": 0.0, "gy": 0.0, "gz": -1.0}] * 50}]
-        a = ssl_probe.accel([x], T, np.array([0]), 150)[0]
+        a = ssl_probe.accel([x], 150)[0]
         self.assertEqual(a.shape, (3, 150))
         lo = (150 - 30) // 2  # 0.98 s at 30 Hz is 30 samples
         np.testing.assert_allclose(a[0, lo:lo + 30], np.sin(2 * np.pi * np.arange(30) / 30), atol=0.01)

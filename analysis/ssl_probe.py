@@ -5,9 +5,9 @@ embeddings. Scored leave-one-wear-out next to DTW-1NN and the proto-net from pro
 and seeds, so those two rows match proto_net.py's.
 Encoder input: 3-axis acceleration in g at 30 Hz in 5 s windows (harnet5, 150 samples; harnet10 takes 10 s, 300).
 Its training data were wrist accelerometers, which measure gravity too, so each take's input is its user
-acceleration (gravity frame, as in proto_net.py) plus 1 g along the reference gravity direction. It is resampled
-from 50 to 30 Hz by linear interpolation and centred in a window of a still head (gravity only). No per-wear z:
-the encoder expects g.
+acceleration (gravity frame, as in proto_net.py) plus 1 g along reseat.DOWN, where the gravity frame turns every
+wear's gravity. It is resampled from 50 to 30 Hz by linear interpolation and centred in a window of a still head
+(gravity only). No per-wear z: the encoder expects g.
 Two rows: logistic regression fitted on every training take of the fold (all people, the other wears), and the
 nearest prototype on the frozen embeddings, from the same 5 enrolment takes as DTW and the proto-net. Chance
 refits the logistic regression on every label shuffle (all shuffles at once).
@@ -21,7 +21,7 @@ import numpy as np
 import torch
 import torch.nn.functional as nnf
 import proto_net
-from clean_test_lib import raw
+import reseat
 
 RATE, HZ = 50.0, 30.0  # AirPods motion rate, the encoder's rate
 WINDOW = {"harnet5": 150, "harnet10": 300}  # encoder window in samples at 30 Hz
@@ -34,16 +34,14 @@ def encoder(name):
     for p in m.parameters(): p.requires_grad_(False)
     return m
 
-def accel(X, T, wear, n):
+def accel(X, n):
     """Encoder input (takes, 3, n) from proto_net.features X: user accel plus 1 g of gravity along the direction the
     gravity frame turns every wear to, at 30 Hz, centred in n samples of a still head."""
-    g = [v / np.linalg.norm(v) for v in (np.array([raw(t, proto_net.GRAV).mean(0) for t, k in zip(T, wear) if k == w]).mean(0)
-                                         for w in set(wear))]
-    ref = np.mean(g, 0) / np.linalg.norm(np.mean(g, 0)); out = []
+    out = []
     for x in X:
         t = np.arange(0, (len(x) - 1) / RATE + 1e-9, 1 / HZ)
         a = np.stack([np.interp(t, np.arange(len(x)) / RATE, c) for c in x[:, :3].T], 1)
-        out.append((proto_net.window(a, n) + ref).T)
+        out.append((proto_net.window(a, n) + reseat.DOWN).T)
     return np.array(out, np.float32)
 
 def embed(m, A, batch=256):
@@ -83,7 +81,7 @@ if __name__ == "__main__":
     except Exception as e: sys.exit(f"could not load {args.model} from torch.hub (needs network the first time): {e!r}")
     split = "leave-one-wear-out"
     got = proto_net.methods(T, y, who, wear, local, args.episodes, args.steps, args.seed, splits=(split,))
-    E = embed(m, accel(proto_net.features(T, wear)[0], T, wear, WINDOW[args.model]))
+    E = embed(m, accel(proto_net.features(T, wear)[0], WINDOW[args.model]))
     for name, tr, en, q, r in got[split]:
         r[f"{args.model} + logistic regression, all training takes"] = lr_rule(E, tr, q, len(words))
         r[f"{args.model}, {proto_net.SHOT}-take prototypes"] = proto_net.proto_rule(E, en, q)
