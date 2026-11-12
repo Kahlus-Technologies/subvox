@@ -2,7 +2,8 @@
 
 Subvox sessions (audio.caf) get labels if they have none. Subvox Dictate sessions (audio.wav) are always
 relabelled with Phonon-2, the most accurate model we run locally; the app's own labels are kept as
-words.app.json. Dictate sessions use the audio clock already (offset 0)."""
+words.app.json. Dictate sessions use the audio clock already (offset 0). Silent-mouthing sessions are
+skipped: their audio has no speech, and tools/build_dataset.py labels them from their paired spoken take."""
 import json, os, pathlib, subprocess, sys, tempfile
 
 root = pathlib.Path(os.environ.get("SUBVOX_SESSIONS", pathlib.Path.home() / "Documents/Subvox/Sessions"))
@@ -20,9 +21,17 @@ def end_aligned_offset(d):
 def audio_of(d):
     return d / "audio.wav" if (d / "audio.wav").exists() else d / "audio.caf"
 
+def is_silent(d):
+    if d.name.endswith("-silent"):
+        return True
+    try:
+        return json.loads((d / "meta.json").read_text()).get("condition") == "Silent mouthing"
+    except (OSError, ValueError):
+        return False
+
 def needs_label(d):
     words = d / "words.json"
-    if not audio_of(d).exists():
+    if not audio_of(d).exists() or is_silent(d):
         return False
     if not words.exists():
         return True
