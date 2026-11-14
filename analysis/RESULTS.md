@@ -138,3 +138,25 @@ Linear probe of a pretrained encoder (#19). `ssl_probe.py` loads the ssl-wearabl
 | leave-one-wear-out | harnet5, 5-take prototypes | 73% (79/108) | A0 10/12, A1 9/12, A2 10/12, B0 7/12, B1 7/12, B2 7/12, C0 9/12, C1 11/12, C2 9/12 | 11% | 76% (73/96) | 33% | 0.001 |
 
 On this fixture the frozen encoder does not beat DTW-1NN. Logistic regression on its embeddings gets 90% leave-one-wear-out, against 96% for DTW and 100% for the proto-net. Nearest prototype on the same embeddings, from the same 5 takes per word, gets 73%. A run with `--model harnet10` (10 s windows, 1024-number embedding) gave 92% and 69%, also below DTW. By the issue's rule, the result is that the probe does not help. The fixture cannot really answer the question, though. Its words are synthetic sine bursts, not real mouthing. In them the accel noise is 10% of the motion, against about 3% for the rotation rate, which the encoder never sees. The real answer needs the owner's run on real takes: `python3 analysis/ssl_probe.py --dataset <dataset.json> --results analysis/RESULTS.md`.
+
+### `python3 analysis/reseat.py --dataset /Users/aayu/Library/Application Support/Subvox/dataset.json --results analysis/RESULTS.md`
+
+234 takes, words ['back', 'next', 'no', 'stop', 'yes'], 3 wears of [201, 29, 4] takes (gap > 180 s or wear field). DTW-1NN on accel + rotation rate.
+
+| fix | leave-one-wear-out | by held-out wear | within-wear leave-one-out | chance (shuffled labels) | p vs chance |
+|---|---|---|---|---|---|
+| none (global z, like the app) | 42% (98/234) | 79/201, 17/29, 2/4 | 68% (159/234) | 20% | 0.001 |
+| per-wear z | 41% (97/234) | 80/201, 15/29, 2/4 | 68% (158/234) | 20% | 0.001 |
+| gravity frame | 40% (94/234) | 75/201, 17/29, 2/4 | 68% (160/234) | 20% | 0.001 |
+| per-wear z + gravity frame | 42% (99/234) | 81/201, 16/29, 2/4 | 69% (161/234) | 20% | 0.001 |
+
+### `python3 analysis/ssl_probe.py --dataset /Users/aayu/Library/Application Support/Subvox/dataset.json --results analysis/RESULTS.md`
+
+234 takes, words ['back', 'next', 'no', 'stop', 'yes']. People: A = /Users/aayu/Library/Application Support/Subvox/dataset.json (234 takes, 3 wears). Features: 9 channels, gravity frame + per-wear z. Proto-net: 36,228 parameters (1D CNN, 2 residual SE blocks, 32-number embedding), 300 episodes per fold of up to 10 words x (5 support + 3 query) takes, augmentation: rotation, time warp, magnitude, drift, seed 0. Encoder: ssl-wearables harnet5, 4,227,904 parameters, frozen, 512-number embedding; input: user accel + 1 g gravity at 30 Hz, centred in 150 samples.
+
+| split | method | accuracy | by held-out wear or person | rejected (margin < 0.05) | accuracy on the rest | chance (shuffled labels) | p vs chance |
+|---|---|---|---|---|---|---|---|
+| leave-one-wear-out | DTW-1NN, 5 takes per word | 44% (103/234) | A0 94/201, A1 9/29, A2 0/4 | 55% | 61% (65/106) | 20% | 0.001 |
+| leave-one-wear-out | proto-net, 5-take prototypes | 29% (67/234) | A0 47/201, A1 18/29, A2 2/4 | 7% | 28% (60/217) | 20% | 0.001 |
+| leave-one-wear-out | harnet5 + logistic regression, all training takes | 26% (60/234) | A0 50/201, A1 10/29, A2 0/4 | 1% | 26% (60/231) | 20% | 0.023 |
+| leave-one-wear-out | harnet5, 5-take prototypes | 22% (51/234) | A0 45/201, A1 5/29, A2 1/4 | 50% | 21% (24/117) | 20% | 0.251 |
